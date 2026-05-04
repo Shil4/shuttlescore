@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/shuttlescore/static/css/main.cccd562f.css",
+    "main.js": "/shuttlescore/static/js/main.5657f94c.js",
+    "static/js/453.829218b7.chunk.js": "/shuttlescore/static/js/453.829218b7.chunk.js",
+    "index.html": "/shuttlescore/index.html",
+    "main.cccd562f.css.map": "/shuttlescore/static/css/main.cccd562f.css.map",
+    "main.5657f94c.js.map": "/shuttlescore/static/js/main.5657f94c.js.map",
+    "453.829218b7.chunk.js.map": "/shuttlescore/static/js/453.829218b7.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.cccd562f.css",
+    "static/js/main.5657f94c.js"
+  ]
+}
