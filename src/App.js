@@ -1,24 +1,44 @@
-import logo from './logo.svg';
+import { useState } from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import PublicView from './components/public/PublicView';
 import './App.css';
+
+function AppContent() {
+  const { user, loading } = useAuth();
+  const [showLogin, setShowLogin] = useState(false);
+
+  if (loading) {
+    return (
+      <div className="app-loading">
+        <div className="app-loading-inner">
+          <span className="app-loading-icon">🏸</span>
+          <p>Loading ShuttleScore...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Logged in → show dashboard
+  if (user) {
+    return <Dashboard />;
+  }
+
+  // Show login page if requested
+  if (showLogin) {
+    return <Login onBack={() => setShowLogin(false)} />;
+  }
+
+  // Default: public view
+  return <PublicView onLogin={() => setShowLogin(true)} />;
+}
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 

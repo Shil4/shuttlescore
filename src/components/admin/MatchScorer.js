@@ -1,0 +1,352 @@
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../../lib/supabase';
+import './MatchScorer.css';
+
+export default function MatchScorer({ matchId, allPlayers, onBack }) {
+  const [match, setMatch] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const loadMatch = useCallback(async () => {
+    try {
+      const { data, error: err } = await supabase
+        .from('matches')
+        .select('*')
+        .eq('id', matchId)
+        .single();
+      if (err) throw err;
+      setMatch(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [matchId]);
+
+  useEffect(() => {
+    loadMatch();
+  }, [loadMatch]);
+
+  const playerName = (id) => {
+    if (!id) return 'BYE';
+    return allPlayers.find(p => p.id === id)?.name || id.substring(0, 8);
+  };
+
+  const sideLabel = (sideArr) => {
+    if (!sideArr || sideArr.length === 0) return 'TBD';
+    return sideArr.map(playerName).join(' & ');
+  };
+
+  const scoreData = match?.score_data;
+  const currentSetIndex = scoreData?.current_set ?? 0;
+  const currentSet = scoreData?.sets?.[currentSetIndex];
+  const sets = scoreData?.sets || [];
+
+  // Add point
+  const addPoint = async (side) => {
+    if (!match || saving) return;
+    if (match.status !== 'in_progress' && match.status !== 'finished') return;
+
+    setSaving(true);
+    setError('');
+
+    try {
+      const newScoreData = JSON.parse(JSON.stringify(match.score_data));
+      const set = newScoreData.sets[newScoreData.current_set];
+      const pointKey = side === 'side_a' ? 'side_a_points' : 'side_b_points';
+      set[pointKey]++;
+      set.point_log.push({ scorer: side, timestamp: new Date().toISOString() });
+
+      let winner = match.winner;
+      if (match.status === 'finished') {
+        winner = calculateWinner(newScoreData);
+      }
+
+      const { data, error: err } = await supabase
+        .from('matches')
+        .update({ score_data: newScoreData, winner })
+        .eq('id', matchId)
+        .select()
+        .single();
+      if (err) throw err;
+      setMatch(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Undo last point
+  const undoPoint = async () => {
+    if (!match || saving) return;
+    if (!currentSet?.point_log?.length) return;
+
+    setSaving(true);
+    setError('');
+
+    try {
+      const newScoreData = JSON.parse(JSON.stringify(match.score_data));
+      const set = newScoreData.sets[newScoreData.current_set];
+      const lastPoint = set.point_log.pop();
+      const pointKey = lastPoint.scorer === 'side_a' ? 'side_a_points' : 'side_b_points';
+      set[pointKey] = Math.max(0, set[pointKey] - 1);
+
+      let winner = match.winner;
+      if (match.status === 'finished') {
+        winner = calculateWinner(newScoreData);
+      }
+
+      const { data, error: err } = await supabase
+        .from('matches')
+        .update({ score_data: newScoreData, winner })
+        .eq('id', matchId)
+        .select()
+        .single();
+      if (err) throw err;
+      setMatch(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // New set
+  const addNewSet = async () => {
+    if (!match || saving) return;
+
+    setSaving(true);
+    try {
+      const newScoreData = JSON.parse(JSON.stringify(match.score_data));
+      newScoreData.sets.push({ side_a_points: 0, side_b_points: 0, point_log: [] });
+      newScoreData.current_set = newScoreData.sets.length - 1;
+
+      const { data, error: err } = await supabase
+        .from('matches')
+        .update({ score_data: newScoreData })
+        .eq('id', matchId)
+        .select()
+        .single();
+      if (err) throw err;
+      setMatch(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Switch active set
+  const switchSet = async (idx) => {
+    if (!match || saving || idx === currentSetIndex) return;
+
+    setSaving(true);
+    try {
+      const newScoreData = JSON.parse(JSON.stringify(match.score_data));
+      newScoreData.current_set = idx;
+
+      const { data, error: err } = await supabase
+        .from('matches')
+        .update({ score_data: newScoreData })
+        .eq('id', matchId)
+        .select()
+        .single();
+      if (err) throw err;
+      setMatch(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Finish match
+  const finishMatch = async () => {
+    if (!match || saving) return;
+    if (match.status !== 'in_progress') return;
+
+    const winner = calculateWinner(match.score_data);
+    if (winner === 'tied') {
+      setError('Result is tied — add another set before finishing.');
+      return;
+    }
+    if (winner === 'no_data') {
+      setError('No score data recorded.');
+      return;
+    }
+
+    if (!window.confirm('Finish this match? You can still edit scores for 5 minutes after.')) return;
+
+    setSaving(true);
+    setError('');
+
+    try {
+      const finishedAt = new Date().toISOString();
+      const durationSeconds = match.started_at
+        ? Math.round((new Date(finishedAt) - new Date(match.started_at)) / 1000)
+        : null;
+
+      const { data, error: err } = await supabase
+        .from('matches')
+        .update({
+          status: 'finished',
+          winner,
+          finished_at: finishedAt,
+          duration_seconds: durationSeconds,
+        })
+        .eq('id', matchId)
+        .select()
+        .single();
+      if (err) throw err;
+      setMatch(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Lock match (after grace period or manually)
+  const lockMatch = async () => {
+    if (!match || saving) return;
+    if (match.status !== 'finished') return;
+    if (!window.confirm('Lock this match? No more edits will be possible (except admin override).')) return;
+
+    setSaving(true);
+    try {
+      const { data, error: err } = await supabase
+        .from('matches')
+        .update({ status: 'locked', locked_at: new Date().toISOString() })
+        .eq('id', matchId)
+        .select()
+        .single();
+      if (err) throw err;
+      setMatch(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Calculate winner
+  const calculateWinner = (sd) => {
+    if (!sd?.sets?.length) return 'no_data';
+    let sideASets = 0, sideBSets = 0;
+    for (const set of sd.sets) {
+      if (set.side_a_points > set.side_b_points) sideASets++;
+      else if (set.side_b_points > set.side_a_points) sideBSets++;
+    }
+    if (sd.sets.length === 1) {
+      if (sideASets > sideBSets) return 'side_a';
+      if (sideBSets > sideASets) return 'side_b';
+      return 'tied';
+    }
+    if (sideASets > sideBSets) return 'side_a';
+    if (sideBSets > sideASets) return 'side_b';
+    return 'tied';
+  };
+
+  const isEditable = match?.status === 'in_progress' || match?.status === 'finished';
+
+  if (loading) return <div className="admin-loading">Loading match...</div>;
+  if (!match) return <div className="admin-error">Match not found.</div>;
+
+  return (
+    <div className="scorer">
+      <button className="admin-btn secondary" onClick={onBack} style={{ marginBottom: 16 }}>
+        ← Back to Matches
+      </button>
+
+      {error && <div className="admin-error">{error}</div>}
+
+      {/* Match header */}
+      <div className="scorer-header">
+        <div className="scorer-status">
+          {match.status === 'in_progress' && <span className="scorer-live-dot" />}
+          {match.status.replace('_', ' ').toUpperCase()}
+        </div>
+      </div>
+
+      {/* Score display */}
+      <div className="scorer-main">
+        <div
+          className={`scorer-side side-a ${match.winner === 'side_a' ? 'winner' : ''}`}
+          onClick={() => isEditable && addPoint('side_a')}
+          style={{ cursor: isEditable ? 'pointer' : 'default' }}
+        >
+          <div className="scorer-side-name">{sideLabel(match.side_a)}</div>
+          <div className="scorer-side-points">{currentSet?.side_a_points ?? 0}</div>
+          {isEditable && <div className="scorer-tap-hint">Tap to score</div>}
+        </div>
+
+        <div className="scorer-middle">
+          <div className="scorer-sets-display">
+            {sets.map((set, i) => (
+              <div
+                key={i}
+                className={`scorer-set-pill ${i === currentSetIndex ? 'active' : ''}`}
+                onClick={() => switchSet(i)}
+              >
+                <span className="scorer-set-label">Set {i + 1}</span>
+                <span className="scorer-set-score">{set.side_a_points}-{set.side_b_points}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div
+          className={`scorer-side side-b ${match.winner === 'side_b' ? 'winner' : ''}`}
+          onClick={() => isEditable && addPoint('side_b')}
+          style={{ cursor: isEditable ? 'pointer' : 'default' }}
+        >
+          <div className="scorer-side-name">{sideLabel(match.side_b)}</div>
+          <div className="scorer-side-points">{currentSet?.side_b_points ?? 0}</div>
+          {isEditable && <div className="scorer-tap-hint">Tap to score</div>}
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div className="scorer-actions">
+        {isEditable && (
+          <>
+            <button className="scorer-btn undo" onClick={undoPoint} disabled={saving || !currentSet?.point_log?.length}>
+              ↩ Undo
+            </button>
+            <button className="scorer-btn new-set" onClick={addNewSet} disabled={saving}>
+              + New Set
+            </button>
+          </>
+        )}
+
+        {match.status === 'in_progress' && (
+          <button className="scorer-btn finish" onClick={finishMatch} disabled={saving}>
+            ✓ Finish Match
+          </button>
+        )}
+
+        {match.status === 'finished' && (
+          <button className="scorer-btn lock" onClick={lockMatch} disabled={saving}>
+            🔒 Lock Match
+          </button>
+        )}
+      </div>
+
+      {/* Point log */}
+      {currentSet?.point_log?.length > 0 && (
+        <div className="scorer-log">
+          <div className="scorer-log-title">Point Log — Set {currentSetIndex + 1}</div>
+          <div className="scorer-log-list">
+            {currentSet.point_log.map((p, i) => (
+              <span key={i} className={`scorer-log-dot ${p.scorer}`} title={`Point ${i + 1}: ${p.scorer === 'side_a' ? sideLabel(match.side_a) : sideLabel(match.side_b)}`} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {saving && <div className="scorer-saving">Saving...</div>}
+    </div>
+  );
+}

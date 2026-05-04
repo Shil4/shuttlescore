@@ -1,0 +1,315 @@
+/* ── Draw Manager Styles ── */
+
+.admin-success {
+  background: #152a15;
+  border: 1px solid #2a5a2a;
+  color: #88ff88;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+/* Event tabs */
+.draw-event-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.draw-event-tab {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid #2a2a3a;
+  background: #14141f;
+  color: #999;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.draw-event-tab:hover { border-color: #444; color: #f0f0f0; }
+.draw-event-tab.active { border-color: #d4a843; color: #d4a843; background: #1e1a14; }
+
+.draw-tab-status { font-size: 10px; }
+.draw-tab-status.draft { color: #666; }
+.draw-tab-status.draw_generated { color: #4ecb71; }
+.draw-tab-status.in_progress { color: #d4a843; }
+.draw-tab-status.completed { color: #888; }
+
+/* Info bar */
+.draw-info-bar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 14px 18px;
+  background: #14141f;
+  border: 1px solid #2a2a3a;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.draw-info-item { display: flex; flex-direction: column; gap: 2px; }
+.draw-info-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #666; font-weight: 600; }
+.draw-info-value { font-size: 14px; color: #ddd; font-weight: 500; }
+
+/* Actions bar */
+.draw-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* ── Partner Pairing ── */
+.pairing-section {
+  background: #12121c;
+  border: 1px solid #2a2a3a;
+  border-radius: 10px;
+  padding: 18px;
+  margin-bottom: 20px;
+}
+
+.pairing-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pairing-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pairing-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #14141f;
+  border: 1px solid #1e1e2e;
+  border-radius: 8px;
+}
+
+.pairing-number {
+  font-size: 11px;
+  color: #555;
+  font-weight: 700;
+  min-width: 40px;
+}
+
+.pairing-players {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.pairing-player {
+  padding: 4px 10px;
+  background: #1e1e30;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #ccc;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+}
+
+.pairing-player:hover {
+  border-color: #d4a843;
+  color: #f0f0f0;
+}
+
+.pairing-player.swap-selected {
+  border-color: #d4a843;
+  background: #2a2215;
+  color: #d4a843;
+}
+
+.pairing-and {
+  color: #555;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.unpaired-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #1e1e2e;
+}
+
+.unpaired-label {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.unpaired-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.unpaired-player {
+  padding: 4px 10px;
+  background: #1e1e30;
+  border: 1px solid #2a2a3a;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #999;
+}
+
+.unpaired-player.clickable {
+  cursor: pointer;
+  border-color: #444;
+}
+
+.unpaired-player.clickable:hover {
+  border-color: #d4a843;
+  color: #d4a843;
+}
+
+/* ── Late player warning ── */
+.draw-late-warning {
+  background: #2a2215;
+  border: 1px solid #5a4a2a;
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+}
+
+.draw-late-text {
+  font-size: 13px;
+  color: #d4a843;
+  margin-bottom: 10px;
+}
+
+.draw-late-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ── Draw visualization ── */
+.draw-content { margin-top: 4px; }
+
+.draw-section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #d4a843;
+  margin: 0;
+}
+
+.draw-groups-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.draw-group-card {
+  background: #14141f;
+  border: 1px solid #2a2a3a;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.draw-group-name { margin: 0 0 10px; font-size: 14px; font-weight: 700; color: #d4a843; }
+
+.draw-group-players { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+
+.draw-group-player {
+  padding: 4px 10px;
+  background: #1e1e30;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #ccc;
+}
+
+.draw-group-matches {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid #1e1e2e;
+  padding-top: 10px;
+}
+
+.draw-match-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 4px 0;
+}
+
+.draw-match-side { flex: 1; color: #bbb; transition: all 0.15s; padding: 2px 4px; border-radius: 4px; }
+.draw-match-side.swap-highlight { background: #2a2215; color: #d4a843; border: 1px solid #d4a843; }
+.draw-match-vs { color: #555; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+
+/* Bracket */
+.draw-bracket-rounds {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+}
+
+.draw-bracket-round {
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.draw-round-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #1e1e2e;
+}
+
+.draw-bracket-match {
+  background: #14141f;
+  border: 1px solid #2a2a3a;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.draw-bracket-side {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #bbb;
+  border-bottom: 1px solid #1e1e2e;
+  transition: all 0.15s;
+}
+
+.draw-bracket-side:last-child { border-bottom: none; }
+.draw-bracket-side.winner { color: #4ecb71; font-weight: 600; }
+.draw-bracket-side.swap-highlight { background: #2a2215; color: #d4a843; }
+.draw-bracket-side:hover { background: #1a1a2a; }
+
+/* Mobile */
+@media (max-width: 768px) {
+  .draw-info-bar { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .draw-actions-bar { flex-direction: column; align-items: flex-start; }
+  .draw-bracket-rounds { gap: 10px; }
+  .draw-bracket-round { min-width: 160px; }
+  .pairing-list { grid-template-columns: 1fr; }
+}

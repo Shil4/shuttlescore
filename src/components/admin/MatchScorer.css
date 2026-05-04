@@ -1,0 +1,287 @@
+/* ── Match Scorer Styles ── */
+
+.scorer {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.scorer-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.scorer-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #d4a843;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.scorer-live-dot {
+  width: 10px;
+  height: 10px;
+  background: #4ecb71;
+  border-radius: 50%;
+  animation: live-pulse 1.5s infinite;
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(78, 203, 113, 0.5); }
+  50% { opacity: 0.7; box-shadow: 0 0 0 8px rgba(78, 203, 113, 0); }
+}
+
+/* Main scoring area */
+.scorer-main {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.scorer-side {
+  flex: 1;
+  background: #14141f;
+  border: 2px solid #2a2a3a;
+  border-radius: 16px;
+  padding: 24px 16px;
+  text-align: center;
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.scorer-side:hover {
+  border-color: #444;
+}
+
+.scorer-side:active {
+  transform: scale(0.97);
+}
+
+.scorer-side.side-a:active {
+  border-color: #5588ff;
+  background: #151525;
+}
+
+.scorer-side.side-b:active {
+  border-color: #ff6655;
+  background: #251515;
+}
+
+.scorer-side.winner {
+  border-color: #4ecb71;
+}
+
+.scorer-side-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ccc;
+  margin-bottom: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scorer-side.winner .scorer-side-name {
+  color: #4ecb71;
+}
+
+.scorer-side-points {
+  font-size: 56px;
+  font-weight: 800;
+  color: #f0f0f0;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.scorer-tap-hint {
+  font-size: 11px;
+  color: #555;
+  margin-top: 10px;
+}
+
+/* Middle section */
+.scorer-middle {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-width: 70px;
+}
+
+.scorer-sets-display {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scorer-set-pill {
+  padding: 6px 10px;
+  background: #1e1e2e;
+  border-radius: 6px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+}
+
+.scorer-set-pill.active {
+  border-color: #d4a843;
+  background: #2a2215;
+}
+
+.scorer-set-pill:hover {
+  border-color: #444;
+}
+
+.scorer-set-label {
+  display: block;
+  font-size: 9px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+}
+
+.scorer-set-score {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ddd;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Actions */
+.scorer-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.scorer-btn {
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s;
+}
+
+.scorer-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.scorer-btn.undo {
+  background: #1e1e30;
+  color: #aaa;
+  border: 1px solid #333;
+}
+
+.scorer-btn.undo:hover:not(:disabled) {
+  border-color: #555;
+  color: #f0f0f0;
+}
+
+.scorer-btn.new-set {
+  background: #1e1e30;
+  color: #aaa;
+  border: 1px solid #333;
+}
+
+.scorer-btn.new-set:hover:not(:disabled) {
+  border-color: #555;
+  color: #f0f0f0;
+}
+
+.scorer-btn.finish {
+  background: #4ecb71;
+  color: #0a0a0f;
+}
+
+.scorer-btn.finish:hover:not(:disabled) {
+  background: #5dd880;
+}
+
+.scorer-btn.lock {
+  background: #d4a843;
+  color: #0a0a0f;
+}
+
+.scorer-btn.lock:hover:not(:disabled) {
+  background: #e0b850;
+}
+
+/* Point log */
+.scorer-log {
+  background: #14141f;
+  border: 1px solid #2a2a3a;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.scorer-log-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+.scorer-log-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.scorer-log-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  cursor: default;
+}
+
+.scorer-log-dot.side_a {
+  background: #5588ff;
+}
+
+.scorer-log-dot.side_b {
+  background: #ff6655;
+}
+
+.scorer-saving {
+  text-align: center;
+  color: #888;
+  font-size: 12px;
+  margin-top: 10px;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .scorer-side-points {
+    font-size: 44px;
+  }
+
+  .scorer-side {
+    padding: 20px 12px;
+  }
+
+  .scorer-main {
+    gap: 8px;
+  }
+
+  .scorer-middle {
+    min-width: 50px;
+  }
+}
