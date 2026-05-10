@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { TournamentService } from '../../services/TournamentService';
-import { PlayerService } from '../../services/PlayerService';
 import { MatchService } from '../../services/MatchService';
 import { DrawService } from '../../services/DrawService';
 import { supabase } from '../../lib/supabase';
+import { getPlayerAge } from '../admin/PlayerManager';
 import './PublicView.css';
 
 export default function PublicView({ onLogin }) {
@@ -27,12 +27,10 @@ export default function PublicView({ onLogin }) {
     try {
       const tourns = await TournamentService.getAll();
       setTournaments(tourns);
-      const players = await PlayerService.getAll();
-      setAllPlayers(players);
 
       // Auto-select first active tournament
       const active = tourns.find(t => t.status === 'in_progress') || tourns[0];
-      if (active) selectTournament(active, players);
+      if (active) selectTournament(active);
       else setLoading(false);
     } catch (err) {
       console.error(err);
@@ -40,10 +38,20 @@ export default function PublicView({ onLogin }) {
     }
   };
 
-  const selectTournament = async (tournament, players) => {
+  const selectTournament = async (tournament) => {
     setSelectedTournament(tournament);
     setLoading(true);
     try {
+      // Load tournament pool players
+      const { data: tp } = await supabase.from('tournament_players').select('player_id').eq('tournament_id', tournament.id);
+      const playerIds = (tp || []).map(r => r.player_id);
+      let players = [];
+      if (playerIds.length > 0) {
+        const { data } = await supabase.from('players').select('*').in('id', playerIds).order('name');
+        players = data || [];
+      }
+      setAllPlayers(players);
+
       const evts = await TournamentService.getEvents(tournament.id);
       setEvents(evts);
       if (evts.length > 0) setSelectedEventId(evts[0].id);
@@ -184,7 +192,7 @@ export default function PublicView({ onLogin }) {
             value={selectedTournament?.id || ''}
             onChange={(e) => {
               const t = tournaments.find(t => t.id === e.target.value);
-              if (t) selectTournament(t, allPlayers);
+              if (t) selectTournament(t);
             }}
           >
             {tournaments.map(t => (
@@ -204,7 +212,8 @@ export default function PublicView({ onLogin }) {
             <button className="pub-profile-close" onClick={() => setSelectedPlayerId(null)}>✕</button>
             <div className="pub-profile-name">{selectedPlayer.name}</div>
             <div className="pub-profile-meta">
-              <span className="pub-profile-badge">{selectedPlayer.age_category || 'adult'}</span>
+              <span className="pub-profile-badge">{selectedPlayer.gender === 'female' ? 'F' : 'M'}</span>
+              {getPlayerAge(selectedPlayer) != null && <span className="pub-profile-badge">{getPlayerAge(selectedPlayer)} years</span>}
             </div>
 
             <div className="pub-profile-stats">
@@ -503,7 +512,7 @@ export default function PublicView({ onLogin }) {
               {filteredPlayers.map(p => (
                 <div key={p.id} className="pub-player-item" onClick={() => setSelectedPlayerId(p.id)}>
                   <div className="pub-player-name">{p.name}</div>
-                  <span className="pub-player-cat">{p.age_category || 'adult'}</span>
+                  <span className="pub-player-cat">{p.gender === 'female' ? 'F' : 'M'}{getPlayerAge(p) != null ? ` · ${getPlayerAge(p)}y` : ''}</span>
                 </div>
               ))}
             </div>

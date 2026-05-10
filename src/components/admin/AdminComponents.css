@@ -368,3 +368,52 @@
 .event-reg-partner {
   color: #d4a843;
 }
+
+/* ── Tournament Player Pool ── */
+.tournament-pool {
+  margin: 0 0 8px; padding: 14px 16px;
+  background: #111119; border: 1px solid #1e1e2e;
+  border-top: none; border-radius: 0 0 8px 8px;
+}
+
+.pool-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+}
+
+.pool-count { font-size: 13px; color: #888; }
+
+.pool-add-section {
+  background: #14141f; border: 1px solid #2a2a3a; border-radius: 8px;
+  padding: 12px; margin-bottom: 10px;
+}
+
+.pool-search-input {
+  width: 100%; padding: 8px 12px; background: #1a1a2a; border: 1px solid #2a2a3a;
+  border-radius: 6px; color: #f0f0f0; font-size: 13px; outline: none; margin-bottom: 8px;
+}
+.pool-search-input:focus { border-color: #d4a843; }
+.pool-search-input::placeholder { color: #555; }
+
+.pool-checklist {
+  max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;
+}
+
+.pool-check-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 6px; cursor: pointer; transition: background 0.1s;
+  font-size: 13px;
+}
+.pool-check-item:hover { background: #1a1a2a; }
+.pool-check-item.selected { background: #1e1a14; }
+.pool-check-name { flex: 1; color: #ddd; }
+.pool-check-meta { font-size: 11px; color: #888; }
+
+.pool-list { display: flex; flex-direction: column; gap: 3px; }
+
+.pool-player-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px; background: #14141f; border-radius: 5px; font-size: 13px;
+}
+.pool-player-name { flex: 1; color: #ddd; }
+.pool-player-meta { font-size: 11px; color: #888; }
+.pool-in-event { font-size: 12px; cursor: help; }
