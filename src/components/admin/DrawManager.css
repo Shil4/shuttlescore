@@ -313,3 +313,12 @@
   .draw-bracket-round { min-width: 160px; }
   .pairing-list { grid-template-columns: 1fr; }
 }
+
+/* Move & Swap interactive states */
+.draw-group-player.clickable { cursor: pointer; transition: all 0.15s; }
+.draw-group-player.clickable:hover { background: #1e1e2e; color: #d4a843; }
+.draw-group-player.swap-highlight { background: #2a2215 !important; color: #d4a843 !important; border-color: #d4a843 !important; }
+.draw-group-player.move-highlight { background: #152a2a !important; color: #4ecb71 !important; border-color: #4ecb71 !important; }
+.draw-group-card.move-target { border-color: #4ecb71; }
+.draw-group-name.clickable { cursor: pointer; }
+.draw-group-name.clickable:hover { color: #4ecb71; }

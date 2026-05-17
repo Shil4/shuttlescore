@@ -18,10 +18,65 @@ export default function PublicView({ onLogin }) {
   const [selectedPlayerId, setSelectedPlayerId] = useState(null);
   const [playerSearch, setPlayerSearch] = useState('');
   const [groups, setGroups] = useState([]);
+  const [fullHistoryPlayerId, setFullHistoryPlayerId] = useState(null);
+  const [fullHistoryData, setFullHistoryData] = useState(null);
+  const [fullHistoryLoading, setFullHistoryLoading] = useState(false);
 
   useEffect(() => {
     loadData();
   }, []);
+
+  // Load full cross-tournament history for a player
+  useEffect(() => {
+    if (!fullHistoryPlayerId) { setFullHistoryData(null); return; }
+    const load = async () => {
+      setFullHistoryLoading(true);
+      try {
+        // Get all tournaments this player participated in
+        const { data: tps } = await supabase.from('tournament_players').select('tournament_id').eq('player_id', fullHistoryPlayerId);
+        const tournIds = (tps || []).map(r => r.tournament_id);
+
+        // Get tournament names
+        const { data: tourns } = await supabase.from('tournaments').select('id, name, start_date, status').in('id', tournIds).order('start_date', { ascending: false });
+
+        // Get all matches across all tournaments where this player participated
+        const result = [];
+        for (const t of (tourns || [])) {
+          const evts = await TournamentService.getEvents(t.id);
+          const evtMap = {};
+          evts.forEach(e => { evtMap[e.id] = e.name; });
+
+          const matchesForTourn = [];
+          for (const evt of evts) {
+            const { data: grps } = await supabase.from('groups').select('id').eq('event_id', evt.id);
+            const grpIds = (grps || []).map(g => g.id);
+            if (grpIds.length === 0) continue;
+            const { data: ms } = await supabase.from('matches').select('*').in('group_id', grpIds);
+            (ms || []).forEach(m => {
+              if ((m.side_a || []).includes(fullHistoryPlayerId) || (m.side_b || []).includes(fullHistoryPlayerId)) {
+                matchesForTourn.push({ ...m, _eventName: evtMap[evt.id] || evt.name });
+              }
+            });
+          }
+          result.push({ tournament: t, matches: matchesForTourn });
+        }
+
+        // Get player info
+        const { data: playerData } = await supabase.from('players').select('*').eq('id', fullHistoryPlayerId).single();
+
+        // Get all player names needed
+        const allPids = new Set();
+        result.forEach(r => r.matches.forEach(m => { (m.side_a || []).forEach(id => allPids.add(id)); (m.side_b || []).forEach(id => allPids.add(id)); }));
+        const { data: pNames } = await supabase.from('players').select('id, name').in('id', [...allPids]);
+        const nameMap = {};
+        (pNames || []).forEach(p => { nameMap[p.id] = p.name; });
+
+        setFullHistoryData({ player: playerData, tournaments: result, nameMap });
+      } catch (err) { console.error(err); }
+      finally { setFullHistoryLoading(false); }
+    };
+    load();
+  }, [fullHistoryPlayerId]);
 
   const loadData = async () => {
     try {
@@ -179,6 +234,94 @@ export default function PublicView({ onLogin }) {
     );
   }
 
+  // ── Full History View ──
+  if (fullHistoryPlayerId) {
+    const fh = fullHistoryData;
+    const histPlayer = fh?.player;
+    const histNameMap = fh?.nameMap || {};
+    const histSideLabel = (side) => (side || []).map(id => histNameMap[id] || '?').join(' & ');
+
+    const allHistMatches = fh ? fh.tournaments.flatMap(t => t.matches) : [];
+    const finishedMatches = allHistMatches.filter(m => m.status === 'finished' || m.status === 'locked');
+    const totalWins = finishedMatches.filter(m =>
+      (m.winner === 'side_a' && (m.side_a || []).includes(fullHistoryPlayerId)) ||
+      (m.winner === 'side_b' && (m.side_b || []).includes(fullHistoryPlayerId))
+    ).length;
+    const totalLosses = finishedMatches.length - totalWins;
+
+    return (
+      <div className="pub">
+        <header className="pub-header">
+          <div className="pub-header-left">
+            <button className="pub-back-btn" onClick={() => setFullHistoryPlayerId(null)}>← Back</button>
+            <span className="pub-logo">🏸 ShuttleScore</span>
+          </div>
+        </header>
+        <div className="pub-content" style={{ maxWidth: 700, margin: '0 auto', padding: '24px 16px' }}>
+          {fullHistoryLoading ? (
+            <div className="pub-loading"><span className="pub-loading-icon">🏸</span><p>Loading history...</p></div>
+          ) : !fh ? (
+            <p style={{ color: '#555' }}>Could not load history.</p>
+          ) : (
+            <>
+              <div className="pub-history-header">
+                <h2 className="pub-history-name">{histPlayer?.name}</h2>
+                <div className="pub-profile-meta">
+                  <span className="pub-profile-badge">{histPlayer?.gender === 'female' ? 'F' : 'M'}</span>
+                  {getPlayerAge(histPlayer) != null && <span className="pub-profile-badge">{getPlayerAge(histPlayer)} years</span>}
+                </div>
+              </div>
+
+              <div className="pub-history-summary">
+                <div className="pub-profile-stat"><span className="pub-profile-stat-num">{fh.tournaments.length}</span><span className="pub-profile-stat-label">Tournaments</span></div>
+                <div className="pub-profile-stat"><span className="pub-profile-stat-num">{finishedMatches.length}</span><span className="pub-profile-stat-label">Played</span></div>
+                <div className="pub-profile-stat"><span className="pub-profile-stat-num" style={{ color: '#4ecb71' }}>{totalWins}</span><span className="pub-profile-stat-label">Won</span></div>
+                <div className="pub-profile-stat"><span className="pub-profile-stat-num" style={{ color: '#ff6655' }}>{totalLosses}</span><span className="pub-profile-stat-label">Lost</span></div>
+              </div>
+
+              {fh.tournaments.map(({ tournament, matches: tMatches }) => (
+                <div key={tournament.id} className="pub-history-tournament">
+                  <div className="pub-history-tournament-header">
+                    <h3>{tournament.name}</h3>
+                    <span className="pub-history-tournament-date">{tournament.start_date || ''}</span>
+                  </div>
+                  {tMatches.length === 0 ? (
+                    <p style={{ color: '#555', fontSize: 13, padding: '8px 12px' }}>No matches in this tournament.</p>
+                  ) : (
+                    <div className="pub-history-matches">
+                      {tMatches.filter(m => m.side_a && m.side_b).map(m => {
+                        const isA = (m.side_a || []).includes(fullHistoryPlayerId);
+                        const won = (isA && m.winner === 'side_a') || (!isA && m.winner === 'side_b');
+                        const finished = m.status === 'finished' || m.status === 'locked';
+                        return (
+                          <div key={m.id} className={`pub-match-mini ${m.status === 'in_progress' ? 'live' : ''}`}>
+                            <div className="pub-match-mini-header">
+                              <span className="pub-match-mini-event">{m._eventName}</span>
+                              <span className="pub-match-mini-stage">{stageLabel(m.stage)}</span>
+                            </div>
+                            <div className="pub-match-mini-sides">
+                              <span className={isA && won ? 'won' : ''}>{histSideLabel(m.side_a)}</span>
+                              <span className="pub-match-mini-score">
+                                {m.score_data?.sets ? scoreDisplay(m) : 'vs'}
+                              </span>
+                              <span className={!isA && won ? 'won' : ''}>{histSideLabel(m.side_b)}</span>
+                            </div>
+                            {m.status === 'in_progress' && <span className="pub-live-badge">LIVE</span>}
+                            {finished && <span className={`pub-result-badge ${won ? 'win' : 'loss'}`}>{won ? 'W' : 'L'}</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="pub">
       {/* Header */}
@@ -243,7 +386,7 @@ export default function PublicView({ onLogin }) {
               </div>
             </div>
 
-            <div className="pub-profile-matches-title">Matches</div>
+            <div className="pub-profile-matches-title">Matches in {selectedTournament.name}</div>
             {playerMatches.length === 0 ? (
               <p style={{ color: '#555', fontSize: 13 }}>No matches yet.</p>
             ) : (
@@ -273,6 +416,10 @@ export default function PublicView({ onLogin }) {
                 })}
               </div>
             )}
+
+            <button className="pub-full-history-btn" onClick={() => { setFullHistoryPlayerId(selectedPlayerId); setSelectedPlayerId(null); }}>
+              📊 View Full History Across All Tournaments
+            </button>
           </div>
         </div>
       )}

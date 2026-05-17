@@ -248,3 +248,17 @@
   .pub-header-tournament { display: none; }
   .pub-bracket-round { min-width: 160px; }
 }
+
+/* Full History */
+.pub-back-btn { background: none; border: 1px solid #333; color: #ddd; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; margin-right: 12px; }
+.pub-back-btn:hover { border-color: #d4a843; color: #d4a843; }
+.pub-full-history-btn { width: 100%; padding: 10px; margin-top: 16px; background: #1a1a2a; border: 1px solid #2a2a3a; border-radius: 8px; color: #d4a843; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.pub-full-history-btn:hover { background: #2a2a3a; border-color: #d4a843; }
+.pub-history-header { margin-bottom: 20px; }
+.pub-history-name { margin: 0 0 8px; font-size: 22px; font-weight: 800; }
+.pub-history-summary { display: flex; gap: 20px; margin-bottom: 24px; padding: 16px; background: #14141f; border-radius: 12px; border: 1px solid #1e1e2e; }
+.pub-history-tournament { margin-bottom: 20px; }
+.pub-history-tournament-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #14141f; border-radius: 8px; margin-bottom: 6px; }
+.pub-history-tournament-header h3 { margin: 0; font-size: 15px; font-weight: 700; }
+.pub-history-tournament-date { font-size: 12px; color: #666; }
+.pub-history-matches { display: flex; flex-direction: column; gap: 6px; padding-left: 8px; }

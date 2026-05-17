@@ -417,3 +417,9 @@
 .pool-player-name { flex: 1; color: #ddd; }
 .pool-player-meta { font-size: 11px; color: #888; }
 .pool-in-event { font-size: 12px; cursor: help; }
+
+/* Pool bucket headers for age-ordered event registration */
+.pool-bucket-header { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #888; padding: 8px 12px 4px; margin-top: 4px; border-top: 1px solid #1e1e2e; }
+.pool-bucket-header:first-child { border-top: none; margin-top: 0; }
+.pool-check-item.eligible { border-left: 3px solid #4ecb71; padding-left: 10px; }
+.pool-check-item.other-age { opacity: 0.7; border-left: 3px solid #2a2a3a; padding-left: 10px; }
