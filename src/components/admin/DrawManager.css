@@ -320,5 +320,6 @@
 .draw-group-player.swap-highlight { background: #2a2215 !important; color: #d4a843 !important; border-color: #d4a843 !important; }
 .draw-group-player.move-highlight { background: #152a2a !important; color: #4ecb71 !important; border-color: #4ecb71 !important; }
 .draw-group-card.move-target { border-color: #4ecb71; }
+.draw-group-card.editing { border-style: dashed; }
 .draw-group-name.clickable { cursor: pointer; }
 .draw-group-name.clickable:hover { color: #4ecb71; }

@@ -1,4 +1,3 @@
-// ─── DrawService ─────────────────────────────────────────────
 import { supabase } from '../lib/supabase';
 
 function shuffle(arr) {
@@ -13,83 +12,48 @@ function shuffle(arr) {
 function nextPowerOf2(n) { let p = 1; while (p < n) p *= 2; return p; }
 
 /**
- * Schedule round-robin matches within a group so no player plays 3+ in a row.
- * Uses a "circle method" for balanced round-robin scheduling.
+ * Schedule round-robin matches using circle method.
+ * Returns match pairs as [[idx_a, idx_b], ...] ordered so
+ * no player plays 3+ in a row.
  */
-function scheduleGroupMatches(participants, eventId, groupId) {
-  const n = participants.length;
+function circleSchedule(n) {
   if (n < 2) return [];
-
-  // Generate all pairwise matches
-  const allPairs = [];
-  for (let a = 0; a < n; a++) {
-    for (let b = a + 1; b < n; b++) {
-      allPairs.push([a, b]);
-    }
-  }
-
-  // Use circle method to create balanced rounds
-  // Each round, every player plays at most once
-  const rounds = [];
-  const items = [...Array(n).keys()]; // [0, 1, 2, ..., n-1]
-
-  // For odd number of players, add a dummy (-1 = bye round)
+  const items = [...Array(n).keys()];
   if (n % 2 !== 0) items.push(-1);
   const total = items.length;
-  const numRounds = total - 1;
-
-  for (let r = 0; r < numRounds; r++) {
+  const rounds = [];
+  for (let r = 0; r < total - 1; r++) {
     const round = [];
     for (let i = 0; i < total / 2; i++) {
-      const a = items[i];
-      const b = items[total - 1 - i];
+      const a = items[i], b = items[total - 1 - i];
       if (a !== -1 && b !== -1 && a < n && b < n) {
         round.push([Math.min(a, b), Math.max(a, b)]);
       }
     }
     rounds.push(round);
-    // Rotate: fix first element, rotate the rest
     const last = items.pop();
     items.splice(1, 0, last);
   }
+  return rounds;
+}
 
-  // Flatten rounds into ordered match list
-  // This guarantees no player plays more than 2 consecutive matches
-  const scheduled = [];
-  const usedPairs = new Set();
-  for (const round of rounds) {
-    for (const [a, b] of round) {
-      const key = `${a}-${b}`;
-      if (!usedPairs.has(key)) {
-        usedPairs.add(key);
-        scheduled.push({
-          event_id: eventId,
-          group_id: groupId,
-          stage: 'group',
-          side_a: participants[a].playerIds,
-          side_b: participants[b].playerIds,
-          status: 'pending',
-        });
-      }
-    }
+/**
+ * Build group assignments from player list.
+ * Returns array of arrays: [[p1,p2,p3,p4], [p5,p6,p7,p8], ...]
+ */
+function distributeIntoGroups(participants, groupSize) {
+  const n = participants.length;
+  let numGroups = Math.max(1, Math.floor(n / groupSize));
+  if (n - numGroups * groupSize >= groupSize) numGroups++;
+  const assignments = [];
+  let idx = 0;
+  for (let g = 0; g < numGroups; g++) {
+    let size = Math.floor(n / numGroups);
+    if (g < n % numGroups) size++;
+    assignments.push(participants.slice(idx, idx + size));
+    idx += size;
   }
-
-  // Any pairs not yet scheduled (shouldn't happen with circle method, but safety net)
-  for (const [a, b] of allPairs) {
-    const key = `${a}-${b}`;
-    if (!usedPairs.has(key)) {
-      scheduled.push({
-        event_id: eventId,
-        group_id: groupId,
-        stage: 'group',
-        side_a: participants[a].playerIds,
-        side_b: participants[b].playerIds,
-        status: 'pending',
-      });
-    }
-  }
-
-  return scheduled;
+  return assignments;
 }
 
 export const DrawService = {
@@ -115,25 +79,18 @@ export const DrawService = {
         label: playerMap.get(r.player_id)?.name || 'Unknown',
       }));
     } else {
-      const partnerLookup = new Map();
-      for (const r of registrations) { if (r.partner_id) partnerLookup.set(r.player_id, r.partner_id); }
-      for (const r of registrations) {
-        if (!partnerLookup.has(r.player_id)) {
-          for (const [pid, partnerId] of partnerLookup.entries()) {
-            if (partnerId === r.player_id) { partnerLookup.set(r.player_id, pid); break; }
-          }
-        }
-      }
       const seen = new Set();
       const pairList = [];
       for (const r of registrations) {
         if (seen.has(r.player_id)) continue;
-        const partnerId = partnerLookup.get(r.player_id);
-        if (partnerId && !seen.has(partnerId)) {
-          seen.add(r.player_id); seen.add(partnerId);
-          pairList.push({ playerIds: [r.player_id, partnerId], label: `${playerMap.get(r.player_id)?.name || '?'} & ${playerMap.get(partnerId)?.name || '?'}` });
-        } else if (!partnerId) {
-          seen.add(r.player_id);
+        seen.add(r.player_id);
+        if (r.partner_id && !seen.has(r.partner_id)) {
+          seen.add(r.partner_id);
+          pairList.push({
+            playerIds: [r.player_id, r.partner_id],
+            label: `${playerMap.get(r.player_id)?.name || '?'} & ${playerMap.get(r.partner_id)?.name || '?'}`,
+          });
+        } else if (!r.partner_id) {
           pairList.push({ playerIds: [r.player_id], label: playerMap.get(r.player_id)?.name || '?' });
         }
       }
@@ -151,70 +108,40 @@ export const DrawService = {
     return result;
   },
 
-  // ── Round Robin with smart group distribution ──
+  // ── Round Robin ──
   async _generateRoundRobin(event, participants) {
     const groupSize = event.group_size || 4;
-    const n = participants.length;
-
-    // Smart distribution: compute number of groups and distribute evenly
-    // e.g., 41 players, group_size 4 → 11 groups (10×4 + 1×1 is bad)
-    //   Instead: ceil(41/4) = 11 groups → distribute: 41/11 = 3.7
-    //   So 8 groups of 4 and 3 groups of 3... OR
-    //   Better: 10 groups of 4 and 1 group of 5 (minimize variance)
-    //   Strategy: numGroups = floor(n / groupSize), remainder gets distributed
-    let numGroups = Math.floor(n / groupSize);
-    let remainder = n - numGroups * groupSize;
-
-    if (remainder > 0) {
-      // If remainder is too small (e.g., 1 player alone), distribute to existing groups
-      if (numGroups === 0) {
-        numGroups = 1; // All players in one group
-        remainder = 0;
-      } else if (remainder < Math.ceil(groupSize / 2)) {
-        // Distribute remainder across existing groups (making some groups groupSize+1)
-        // Keep numGroups the same, remainder players get added to groups
-      } else {
-        // Create one more group for the remainder
-        numGroups++;
-        remainder = 0;
-      }
-    }
-
-    // Distribute participants into groups
-    const groupAssignments = [];
-    let idx = 0;
-    for (let g = 0; g < numGroups; g++) {
-      // Base size for this group
-      let size = Math.floor(n / numGroups);
-      // Distribute the extra players (n % numGroups) across the first few groups
-      if (g < n % numGroups) size++;
-      groupAssignments.push(participants.slice(idx, idx + size));
-      idx += size;
-    }
-
+    const assignments = distributeIntoGroups(participants, groupSize);
     const groups = [];
-    for (let g = 0; g < groupAssignments.length; g++) {
-      const groupParticipants = groupAssignments[g];
-      const groupName = `Group ${String.fromCharCode(65 + g)}`;
 
+    for (let g = 0; g < assignments.length; g++) {
+      const groupParticipants = assignments[g];
+      const groupName = `Group ${String.fromCharCode(65 + g)}`;
       const { data: group, error } = await supabase
         .from('groups').insert({ event_id: event.id, name: groupName }).select().single();
       if (error) throw error;
 
-      // Use balanced scheduling
-      const matches = scheduleGroupMatches(groupParticipants, event.id, group.id);
-
+      const rounds = circleSchedule(groupParticipants.length);
+      const matches = [];
+      for (const round of rounds) {
+        for (const [a, b] of round) {
+          matches.push({
+            event_id: event.id, group_id: group.id, stage: 'group',
+            side_a: groupParticipants[a].playerIds,
+            side_b: groupParticipants[b].playerIds,
+            status: 'pending',
+          });
+        }
+      }
       const { data: createdMatches, error: matchError } = await supabase
         .from('matches').insert(matches).select();
       if (matchError) throw matchError;
-
       groups.push({ group, participants: groupParticipants, matches: createdMatches });
     }
-
     return { groups };
   },
 
-  // ── Single Elimination ──
+  // ── Elimination ──
   async _generateElimination(event, participants) {
     const n = participants.length;
     const bracketSize = nextPowerOf2(n);
@@ -227,7 +154,6 @@ export const DrawService = {
     let position = 1;
     const withByes = [...participants];
     while (withByes.length < bracketSize) withByes.push(null);
-
     for (let i = 0; i < bracketSize; i += 2) {
       const sideA = withByes[i], sideB = withByes[i + 1];
       firstRoundMatches.push({
@@ -237,7 +163,6 @@ export const DrawService = {
         ...((!sideA || !sideB) && sideB ? { winner: 'side_b', status: 'locked' } : {}),
       });
     }
-
     const { data: round1, error: r1Error } = await supabase.from('matches').insert(firstRoundMatches).select();
     if (r1Error) throw r1Error;
 
@@ -258,7 +183,6 @@ export const DrawService = {
       previousRound = roundData;
       allMatches.push(...roundData);
     }
-
     return { bracket: allMatches };
   },
 
@@ -275,73 +199,43 @@ export const DrawService = {
     return { groups: groups.data || [], matches: matches.data || [] };
   },
 
-  // ── Swap Players ──
-  async swapPlayers(eventId, matchIdA, sideA, matchIdB, sideB) {
+  // ── Save Staged Group Changes ──
+  // Takes the new groupPlayerMap { groupId: [playerId, ...] } and rebuilds
+  // all group-stage matches from scratch for the given groups.
+  async saveGroupChanges(eventId, groupPlayerMap, groupsToDelete) {
     const locked = await this.isDrawLocked(eventId);
     if (locked) throw new Error('Draw is locked — matches have started');
 
-    const { data: matchA } = await supabase.from('matches').select('*').eq('id', matchIdA).single();
-    const { data: matchB } = await supabase.from('matches').select('*').eq('id', matchIdB).single();
+    // 1. Delete all group-stage matches for this event
+    await supabase.from('matches').delete().eq('event_id', eventId).eq('stage', 'group');
 
-    const playersA = matchA[sideA];
-    const playersB = matchB[sideB];
-
-    await supabase.from('matches').update({ [sideA]: playersB }).eq('id', matchIdA);
-    await supabase.from('matches').update({ [sideB]: playersA }).eq('id', matchIdB);
-  },
-
-  // ── Move Player Between Groups ──
-  async movePlayerToGroup(eventId, playerId, fromGroupId, toGroupId) {
-    const locked = await this.isDrawLocked(eventId);
-    if (locked) throw new Error('Draw is locked — matches have started');
-
-    // 1. Delete all matches involving this player in the source group
-    const { data: fromMatches } = await supabase.from('matches').select('*')
-      .eq('group_id', fromGroupId).eq('stage', 'group');
-
-    const toDelete = (fromMatches || []).filter(m =>
-      (m.side_a || []).includes(playerId) || (m.side_b || []).includes(playerId)
-    );
-    if (toDelete.length > 0) {
-      await supabase.from('matches').delete().in('id', toDelete.map(m => m.id));
+    // 2. Delete empty groups
+    for (const gid of (groupsToDelete || [])) {
+      await supabase.from('groups').delete().eq('id', gid);
     }
 
-    // 2. Get existing players in the target group
-    const { data: toMatches } = await supabase.from('matches').select('*')
-      .eq('group_id', toGroupId).eq('stage', 'group');
+    // 3. Create new groups if needed and rebuild matches
+    for (const [groupId, playerIds] of Object.entries(groupPlayerMap)) {
+      if (playerIds.length < 2) continue; // skip groups with 0-1 players
 
-    const existingPlayerIds = new Set();
-    (toMatches || []).forEach(m => {
-      (m.side_a || []).forEach(id => existingPlayerIds.add(id));
-      (m.side_b || []).forEach(id => existingPlayerIds.add(id));
-    });
-
-    // 3. Create matches between the moved player and every existing player in target group
-    const newMatches = [];
-    for (const existingId of existingPlayerIds) {
-      newMatches.push({
-        event_id: eventId, group_id: toGroupId, stage: 'group',
-        side_a: [playerId], side_b: [existingId], status: 'pending',
-      });
-    }
-    if (newMatches.length > 0) {
-      await supabase.from('matches').insert(newMatches);
-    }
-  },
-
-  // ── Remove Player From Group ──
-  async removePlayerFromGroup(eventId, playerId, groupId) {
-    const locked = await this.isDrawLocked(eventId);
-    if (locked) throw new Error('Draw is locked — matches have started');
-
-    const { data: matches } = await supabase.from('matches').select('*')
-      .eq('group_id', groupId).eq('stage', 'group');
-
-    const toDelete = (matches || []).filter(m =>
-      (m.side_a || []).includes(playerId) || (m.side_b || []).includes(playerId)
-    );
-    if (toDelete.length > 0) {
-      await supabase.from('matches').delete().in('id', toDelete.map(m => m.id));
+      // Build participants as singles (each ID is a solo array)
+      const participants = playerIds.map(pid => ({ playerIds: [pid] }));
+      const rounds = circleSchedule(participants.length);
+      const matches = [];
+      for (const round of rounds) {
+        for (const [a, b] of round) {
+          matches.push({
+            event_id: eventId, group_id: groupId, stage: 'group',
+            side_a: participants[a].playerIds,
+            side_b: participants[b].playerIds,
+            status: 'pending',
+          });
+        }
+      }
+      if (matches.length > 0) {
+        const { error } = await supabase.from('matches').insert(matches);
+        if (error) throw error;
+      }
     }
   },
 

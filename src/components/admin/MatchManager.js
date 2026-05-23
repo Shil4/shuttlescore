@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { TournamentService } from '../../services/TournamentService';
 import { MatchService } from '../../services/MatchService';
-import { PlayerService } from '../../services/PlayerService';
 import { supabase } from '../../lib/supabase';
 import MatchScorer from './MatchScorer';
 import './AdminComponents.css';
@@ -14,6 +13,7 @@ export default function MatchManager() {
   const [selectedEventId, setSelectedEventId] = useState('all');
   const [matches, setMatches] = useState([]);
   const [allPlayers, setAllPlayers] = useState([]);
+  const [allGroups, setAllGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -32,8 +32,8 @@ export default function MatchManager() {
       const data = await TournamentService.getAll();
       setTournaments(data);
       if (allPlayers.length === 0) {
-        const players = await PlayerService.getAll();
-        setAllPlayers(players);
+        const { data: players } = await supabase.from('players').select('*').order('name');
+        setAllPlayers(players || []);
       }
     } catch (err) {
       setError(err.message);
@@ -58,14 +58,20 @@ export default function MatchManager() {
 
   const loadMatches = async (tournamentId) => {
     try {
-      // Get all matches for all events in this tournament
       const evts = await TournamentService.getEvents(tournamentId);
       const allMatches = [];
+      const groupMap = {};
       for (const evt of evts) {
         const eventMatches = await MatchService.getByEvent(evt.id);
-        allMatches.push(...eventMatches.map(m => ({ ...m, _eventName: evt.name, _eventType: evt.type })));
+        const { data: groups } = await supabase.from('groups').select('*').eq('event_id', evt.id);
+        (groups || []).forEach(g => { groupMap[g.id] = g.name; });
+        allMatches.push(...eventMatches.map(m => ({
+          ...m, _eventName: evt.name, _eventType: evt.type,
+          _groupName: m.group_id ? groupMap[m.group_id] || '' : '',
+        })));
       }
       setMatches(allMatches);
+      setAllGroups(Object.entries(groupMap).map(([id, name]) => ({ id, name })));
     } catch (err) {
       setError('Failed to load matches: ' + err.message);
     }
@@ -164,6 +170,29 @@ export default function MatchManager() {
     if (!matchesByStage[m.stage]) matchesByStage[m.stage] = [];
     matchesByStage[m.stage].push(m);
   });
+
+  // Interleave group matches across groups:
+  // Round 1: Group A match 1, Group B match 1, Group C match 1, ...
+  // Round 2: Group A match 2, Group B match 2, Group C match 2, ...
+  // This ensures no player plays 3+ matches in a row
+  if (matchesByStage['group']) {
+    const groupMatches = matchesByStage['group'];
+    const byGroup = {};
+    groupMatches.forEach(m => {
+      const gid = m.group_id || '_';
+      if (!byGroup[gid]) byGroup[gid] = [];
+      byGroup[gid].push(m);
+    });
+    const groupIds = Object.keys(byGroup).sort();
+    const interleaved = [];
+    const maxLen = Math.max(...groupIds.map(gid => byGroup[gid].length));
+    for (let round = 0; round < maxLen; round++) {
+      for (const gid of groupIds) {
+        if (byGroup[gid][round]) interleaved.push(byGroup[gid][round]);
+      }
+    }
+    matchesByStage['group'] = interleaved;
+  }
 
   const stats = {
     total: matches.filter(m => m.side_a && m.side_b).length,
@@ -267,11 +296,17 @@ export default function MatchManager() {
         <div key={stage} className="match-stage-group">
           <div className="match-stage-title">{stageLabel(stage)}</div>
           <div className="match-list">
-            {matchesByStage[stage].sort((a, b) => (a.bracket_position || 0) - (b.bracket_position || 0)).map(m => (
+            {(stage === 'group' ? matchesByStage[stage] : matchesByStage[stage].sort((a, b) => (a.bracket_position || 0) - (b.bracket_position || 0))).map((m, idx) => (
               <div key={m.id} className={`match-card ${m.status}`}>
                 <div className="match-card-header">
-                  <span className="match-event-name">{m._eventName}</span>
-                  {statusBadge(m.status)}
+                  <span className="match-event-name">
+                    {m._eventName}
+                    {m._groupName && <span style={{ color: '#888', fontWeight: 400 }}>{' · '}{m._groupName}</span>}
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {stage === 'group' && <span style={{ fontSize: 10, color: '#555' }}>#{idx + 1}</span>}
+                    {statusBadge(m.status)}
+                  </div>
                 </div>
                 <div className="match-card-body">
                   <div className={`match-side ${m.winner === 'side_a' ? 'winner' : ''}`}>
