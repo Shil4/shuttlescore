@@ -234,7 +234,7 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
       if (err) throw err;
       setMatch(data);
       setEditedAfterFinish(false);
-      setSuccess && setError(''); // clear any errors
+      setError('');
     } catch (err) {
       setError(err.message);
     } finally {
