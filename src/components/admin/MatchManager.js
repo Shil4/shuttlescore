@@ -1,12 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { TournamentService } from '../../services/TournamentService';
 import { MatchService } from '../../services/MatchService';
+import { RealtimeService } from '../../services/RealtimeService';
+import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import MatchScorer from './MatchScorer';
 import './AdminComponents.css';
 import './MatchManager.css';
 
 export default function MatchManager() {
+  const { user } = useAuth();
   const [tournaments, setTournaments] = useState([]);
   const [selectedTournament, setSelectedTournament] = useState(null);
   const [events, setEvents] = useState([]);
@@ -14,8 +17,10 @@ export default function MatchManager() {
   const [matches, setMatches] = useState([]);
   const [allPlayers, setAllPlayers] = useState([]);
   const [allGroups, setAllGroups] = useState([]);
+  const [allReferees, setAllReferees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   // Scoring
   const [scoringMatchId, setScoringMatchId] = useState(null);
@@ -23,8 +28,19 @@ export default function MatchManager() {
   // Filters
   const [statusFilter, setStatusFilter] = useState('all');
 
+  // Realtime ref
+  const selectedTournamentRef = useRef(null);
+
   useEffect(() => {
     loadTournaments();
+
+    // Subscribe to match changes
+    const unsub = RealtimeService.subscribeToMatches(() => {
+      if (selectedTournamentRef.current) {
+        loadMatches(selectedTournamentRef.current);
+      }
+    });
+    return () => unsub();
   }, []);
 
   const loadTournaments = async () => {
@@ -35,6 +51,8 @@ export default function MatchManager() {
         const { data: players } = await supabase.from('players').select('*').order('name');
         setAllPlayers(players || []);
       }
+      const { data: refs } = await supabase.from('referees').select('*').order('username');
+      setAllReferees(refs || []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -44,6 +62,7 @@ export default function MatchManager() {
 
   const selectTournament = async (tournament) => {
     setSelectedTournament(tournament);
+    selectedTournamentRef.current = tournament.id;
     setLoading(true);
     try {
       const evts = await TournamentService.getEvents(tournament.id);
@@ -116,7 +135,31 @@ export default function MatchManager() {
     ));
   };
 
-  // Start match (admin bypass — no referee required)
+  // Assign referee to match
+  const handleAssignReferee = async (matchId, refereeId, isAdmin) => {
+    try {
+      setError('');
+      const update = {
+        referee_confirmed: false,
+        referee_is_admin: !!isAdmin,
+      };
+      if (isAdmin) {
+        update.referee_id = null;
+        update.referee_confirmed = true;
+      } else if (refereeId) {
+        update.referee_id = refereeId;
+      } else {
+        // Unassigning
+        update.referee_id = null;
+        update.referee_is_admin = false;
+      }
+      const { error: updateErr } = await supabase.from('matches').update(update).eq('id', matchId);
+      if (updateErr) { setError('Failed to assign referee: ' + updateErr.message); return; }
+      await loadMatches(selectedTournament.id);
+    } catch (err) { setError('Failed to assign referee: ' + err.message); }
+  };
+
+  // Start match — requires referee assignment OR admin-as-referee
   const handleStartMatch = async (matchId) => {
     try {
       setError('');
@@ -125,33 +168,60 @@ export default function MatchManager() {
         setError('Both sides must be determined before starting.');
         return;
       }
+      if (!match.referee_id && !match.referee_is_admin) {
+        setError('Assign a referee before starting the match.');
+        return;
+      }
+      if (!match.referee_is_admin && !match.referee_confirmed) {
+        setError('Referee hasn\'t confirmed yet. They need to click "Ready to Start" first.');
+        return;
+      }
 
       const initialScore = {
         sets: [{ side_a_points: 0, side_b_points: 0, point_log: [] }],
         current_set: 0,
       };
 
-      await supabase
-        .from('matches')
-        .update({
-          status: 'in_progress',
-          started_at: new Date().toISOString(),
-          score_data: initialScore,
-        })
-        .eq('id', matchId);
+      await supabase.from('matches').update({
+        status: 'in_progress',
+        started_at: new Date().toISOString(),
+        score_data: initialScore,
+      }).eq('id', matchId);
 
-      // Update event status
-      await supabase
-        .from('events')
-        .update({ status: 'in_progress' })
-        .eq('id', match.event_id)
-        .in('status', ['draft', 'draw_generated']);
+      await supabase.from('events').update({ status: 'in_progress' })
+        .eq('id', match.event_id).in('status', ['draft', 'draw_generated']);
 
       await loadMatches(selectedTournament.id);
-      setScoringMatchId(matchId);
+      // Only open scoring if admin is refereeing this match
+      if (match.referee_is_admin) {
+        setScoringMatchId(matchId);
+      }
     } catch (err) {
       setError('Failed to start match: ' + err.message);
     }
+  };
+
+  // False start — revert match to pending
+  const handleFalseStart = async (matchId) => {
+    if (!window.confirm('False start? This will revert the match to pending and clear any score data.')) return;
+    try {
+      await supabase.from('matches').update({
+        status: 'pending',
+        started_at: null,
+        score_data: null,
+        winner: null,
+        referee_confirmed: false,
+      }).eq('id', matchId);
+      setSuccess('Match reverted to pending.');
+      setTimeout(() => setSuccess(''), 3000);
+      await loadMatches(selectedTournament.id);
+    } catch (err) { setError(err.message); }
+  };
+
+  const refName = (refId) => {
+    if (!refId) return null;
+    const ref = allReferees.find(r => r.id === refId);
+    return ref?.display_name || ref?.username || '?';
   };
 
   // Filter matches
@@ -163,20 +233,15 @@ export default function MatchManager() {
     return true;
   });
 
-  // Group by stage
-  const stageOrder = ['group', 'round_of_32', 'round_of_16', 'quarterfinal', 'semifinal', 'final'];
-  const matchesByStage = {};
-  filteredMatches.forEach(m => {
-    if (!matchesByStage[m.stage]) matchesByStage[m.stage] = [];
-    matchesByStage[m.stage].push(m);
-  });
+  // ── Categorize matches into sections ──
+  // Keep interleaved order within each section
+  const interleavedOrder = (matchList) => {
+    // For group-stage matches, interleave across groups
+    const groupMatches = matchList.filter(m => m.stage === 'group');
+    const nonGroupMatches = matchList.filter(m => m.stage !== 'group');
 
-  // Interleave group matches across groups:
-  // Round 1: Group A match 1, Group B match 1, Group C match 1, ...
-  // Round 2: Group A match 2, Group B match 2, Group C match 2, ...
-  // This ensures no player plays 3+ matches in a row
-  if (matchesByStage['group']) {
-    const groupMatches = matchesByStage['group'];
+    if (groupMatches.length === 0) return matchList;
+
     const byGroup = {};
     groupMatches.forEach(m => {
       const gid = m.group_id || '_';
@@ -191,8 +256,27 @@ export default function MatchManager() {
         if (byGroup[gid][round]) interleaved.push(byGroup[gid][round]);
       }
     }
-    matchesByStage['group'] = interleaved;
-  }
+    return [...interleaved, ...nonGroupMatches.sort((a, b) => (a.bracket_position || 0) - (b.bracket_position || 0))];
+  };
+
+  // Build ordered match list preserving interleaved order, then partition by status
+  const allOrdered = interleavedOrder(filteredMatches);
+
+  const liveMatches = allOrdered.filter(m => m.status === 'in_progress');
+  const readyToStart = allOrdered.filter(m => m.status === 'pending' && (m.referee_is_admin || (m.referee_id && m.referee_confirmed)));
+  const awaitingRef = allOrdered.filter(m => m.status === 'pending' && m.referee_id && !m.referee_confirmed && !m.referee_is_admin);
+  const upcoming = allOrdered.filter(m => m.status === 'pending' && !m.referee_id && !m.referee_is_admin && m.side_a?.length && m.side_b?.length);
+  const waitingForPlayers = allOrdered.filter(m => m.status === 'pending' && (!m.side_a?.length || !m.side_b?.length) && !m.referee_id && !m.referee_is_admin);
+  const completed = allOrdered.filter(m => m.status === 'finished' || m.status === 'locked');
+
+  const sections = [
+    { key: 'live', title: '🔴 Live', matches: liveMatches, color: '#4ecb71' },
+    { key: 'ready', title: '✅ Ready to Start', matches: readyToStart, color: '#4ecb71' },
+    { key: 'awaiting', title: '⏳ Awaiting Referee Confirmation', matches: awaitingRef, color: '#d4a843' },
+    { key: 'upcoming', title: '📋 Upcoming', matches: upcoming, color: '#888' },
+    { key: 'waiting', title: '⏸ Waiting for Previous Matches', matches: waitingForPlayers, color: '#555' },
+    { key: 'completed', title: '✓ Completed', matches: completed, color: '#666' },
+  ];
 
   const stats = {
     total: matches.filter(m => m.side_a && m.side_b).length,
@@ -252,6 +336,7 @@ export default function MatchManager() {
       </div>
 
       {error && <div className="admin-error">{error}</div>}
+      {success && <div className="admin-success">{success}</div>}
 
       {/* Stats */}
       <div className="match-stats-bar">
@@ -291,20 +376,22 @@ export default function MatchManager() {
         </button>
       </div>
 
-      {/* Match List by Stage */}
-      {stageOrder.filter(s => matchesByStage[s]).map(stage => (
-        <div key={stage} className="match-stage-group">
-          <div className="match-stage-title">{stageLabel(stage)}</div>
+      {/* Match List by Section */}
+      {sections.filter(s => s.matches.length > 0).map(section => (
+        <div key={section.key} className="match-stage-group">
+          <div className="match-stage-title" style={{ color: section.color, borderColor: section.color }}>
+            {section.title} ({section.matches.length})
+          </div>
           <div className="match-list">
-            {(stage === 'group' ? matchesByStage[stage] : matchesByStage[stage].sort((a, b) => (a.bracket_position || 0) - (b.bracket_position || 0))).map((m, idx) => (
-              <div key={m.id} className={`match-card ${m.status}`}>
+            {section.matches.map((m, idx) => (
+              <div key={m.id} className={`match-card ${m.status} ${section.key === 'ready' ? 'ready-to-start' : ''}`}>
                 <div className="match-card-header">
                   <span className="match-event-name">
                     {m._eventName}
                     {m._groupName && <span style={{ color: '#888', fontWeight: 400 }}>{' · '}{m._groupName}</span>}
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {stage === 'group' && <span style={{ fontSize: 10, color: '#555' }}>#{idx + 1}</span>}
+                    <span style={{ fontSize: 10, color: '#555' }}>{stageLabel(m.stage)}</span>
                     {statusBadge(m.status)}
                   </div>
                 </div>
@@ -323,24 +410,73 @@ export default function MatchManager() {
                     <span className="match-side-name">{sideLabel(m.side_b)}</span>
                   </div>
                 </div>
+                {/* Referee assignment */}
+                <div className="match-referee-row">
+                  {m.status === 'pending' ? (
+                    <>
+                      <select value={m.referee_is_admin ? '__admin__' : (m.referee_id || '')}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val === '__admin__') handleAssignReferee(m.id, null, true);
+                          else handleAssignReferee(m.id, val || null, false);
+                        }}
+                        className="match-referee-select">
+                        <option value="">Assign referee...</option>
+                        <option value="__admin__">🛡️ Admin (you)</option>
+                        {allReferees.filter(r => r.display_name).map(r => (
+                          <option key={r.id} value={r.id}>🏅 {r.display_name}</option>
+                        ))}
+                        {allReferees.filter(r => !r.display_name).map(r => (
+                          <option key={r.id} value={r.id}>🏅 {r.username} (no name)</option>
+                        ))}
+                      </select>
+                      {m.referee_id && !m.referee_is_admin && (
+                        <span style={{ fontSize: 11, color: m.referee_confirmed ? '#4ecb71' : '#d4a843' }}>
+                          {m.referee_confirmed ? '✓ ready' : '⏳ waiting'}
+                        </span>
+                      )}
+                      {m.referee_is_admin && (
+                        <span style={{ fontSize: 11, color: '#4ecb71' }}>✓ admin ref</span>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {m.referee_id && <span className="match-referee-name">🏅 {refName(m.referee_id)}</span>}
+                      {m.referee_is_admin && <span className="match-referee-name">🛡️ Admin{user?.profile?.display_name ? ` (${user.profile.display_name})` : ''}</span>}
+                    </>
+                  )}
+                </div>
                 <div className="match-card-actions">
-                  {m.status === 'pending' && m.side_a?.length > 0 && m.side_b?.length > 0 && (
+                  {section.key === 'ready' && (
                     <button className="admin-btn primary" onClick={() => handleStartMatch(m.id)} style={{ fontSize: 12, padding: '5px 12px' }}>
                       ▶ Start Match
                     </button>
                   )}
+                  {section.key === 'awaiting' && (
+                    <span style={{ fontSize: 12, color: '#d4a843' }}>⏳ Waiting for {refName(m.referee_id)} to confirm</span>
+                  )}
+                  {section.key === 'upcoming' && (
+                    <span style={{ fontSize: 12, color: '#555' }}>Assign a referee to proceed</span>
+                  )}
                   {m.status === 'in_progress' && (
-                    <button className="admin-btn primary" onClick={() => setScoringMatchId(m.id)} style={{ fontSize: 12, padding: '5px 12px' }}>
-                      🏸 Score Match
-                    </button>
+                    <>
+                      <button className="admin-btn primary" onClick={() => setScoringMatchId(m.id)} style={{ fontSize: 12, padding: '5px 12px' }}>
+                        🏸 Score Match
+                      </button>
+                      <button className="admin-btn secondary" onClick={() => handleFalseStart(m.id)} style={{ fontSize: 12, padding: '5px 12px' }}>
+                        ⚠️ False Start
+                      </button>
+                    </>
                   )}
                   {m.status === 'finished' && (
-                    <button className="admin-btn secondary" onClick={() => setScoringMatchId(m.id)} style={{ fontSize: 12, padding: '5px 12px' }}>
-                      ✏️ Edit Score
-                    </button>
-                  )}
-                  {m.status === 'pending' && (!m.side_a?.length || !m.side_b?.length) && (
-                    <span style={{ fontSize: 12, color: '#555' }}>Waiting for previous matches</span>
+                    <>
+                      <button className="admin-btn secondary" onClick={() => setScoringMatchId(m.id)} style={{ fontSize: 12, padding: '5px 12px' }}>
+                        ✏️ Edit Score
+                      </button>
+                      <button className="admin-btn secondary" onClick={() => handleFalseStart(m.id)} style={{ fontSize: 12, padding: '5px 12px', color: '#e85454' }}>
+                        ⚠️ False Start
+                      </button>
+                    </>
                   )}
                 </div>
               </div>

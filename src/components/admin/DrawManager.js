@@ -147,10 +147,19 @@ export default function DrawManager() {
         const newStaged = { ...staged };
         const fromGroup = selectedPlayer.groupId;
         const toGroup = groupId;
+        const playerA = selectedPlayer.playerId;
+        const playerB = playerId;
 
-        // Replace player A with player B in their respective groups
-        newStaged[fromGroup] = newStaged[fromGroup].map(id => id === selectedPlayer.playerId ? playerId : id);
-        newStaged[toGroup] = newStaged[toGroup].map(id => id === playerId ? selectedPlayer.playerId : id);
+        if (fromGroup === toGroup) {
+          // Same group — single pass to avoid overwrite
+          newStaged[fromGroup] = newStaged[fromGroup].map(id =>
+            id === playerA ? playerB : id === playerB ? playerA : id
+          );
+        } else {
+          // Different groups — safe to do separately
+          newStaged[fromGroup] = newStaged[fromGroup].map(id => id === playerA ? playerB : id);
+          newStaged[toGroup] = newStaged[toGroup].map(id => id === playerB ? playerA : id);
+        }
 
         setStaged(newStaged);
         setSelectedPlayer(null);

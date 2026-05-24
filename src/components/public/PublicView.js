@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { TournamentService } from '../../services/TournamentService';
 import { MatchService } from '../../services/MatchService';
 import { DrawService } from '../../services/DrawService';
+import { RealtimeService } from '../../services/RealtimeService';
 import { supabase } from '../../lib/supabase';
 import { getPlayerAge } from '../admin/PlayerManager';
 import './PublicView.css';
@@ -18,12 +19,27 @@ export default function PublicView({ onLogin }) {
   const [selectedPlayerId, setSelectedPlayerId] = useState(null);
   const [playerSearch, setPlayerSearch] = useState('');
   const [groups, setGroups] = useState([]);
+  const [allReferees, setAllReferees] = useState([]);
   const [fullHistoryPlayerId, setFullHistoryPlayerId] = useState(null);
   const [fullHistoryData, setFullHistoryData] = useState(null);
   const [fullHistoryLoading, setFullHistoryLoading] = useState(false);
+  const [selectedRefId, setSelectedRefId] = useState(null);
+  const [refProfileData, setRefProfileData] = useState(null);
+  const [refProfileLoading, setRefProfileLoading] = useState(false);
+
+  // Realtime ref
+  const selectedTournamentObjRef = useRef(null);
 
   useEffect(() => {
     loadData();
+
+    // Subscribe to match changes for live updates
+    const unsub = RealtimeService.subscribeToMatches(() => {
+      if (selectedTournamentObjRef.current) {
+        reloadMatchesOnly(selectedTournamentObjRef.current);
+      }
+    });
+    return () => unsub();
   }, []);
 
   // Load full cross-tournament history for a player
@@ -71,12 +87,78 @@ export default function PublicView({ onLogin }) {
         const nameMap = {};
         (pNames || []).forEach(p => { nameMap[p.id] = p.name; });
 
-        setFullHistoryData({ player: playerData, tournaments: result, nameMap });
+        // Check if this player is also a referee
+        const { data: refRecord } = await supabase.from('referees').select('*').eq('player_id', fullHistoryPlayerId).maybeSingle();
+        let refMatches = [];
+        if (refRecord) {
+          const { data: rms } = await supabase.from('matches').select('*')
+            .eq('referee_id', refRecord.id)
+            .in('status', ['finished', 'locked', 'in_progress'])
+            .order('started_at', { ascending: false });
+          // Get event names for referee matches
+          const rEventIds = [...new Set((rms || []).map(m => m.event_id))];
+          if (rEventIds.length > 0) {
+            const { data: rEvts } = await supabase.from('events').select('id, name').in('id', rEventIds);
+            (rEvts || []).forEach(e => { if (!nameMap[e.id]) nameMap[e.id] = e.name; });
+            refMatches = (rms || []).map(m => {
+              // Get player names for ref matches
+              (m.side_a || []).forEach(id => { if (!nameMap[id]) nameMap[id] = id; });
+              (m.side_b || []).forEach(id => { if (!nameMap[id]) nameMap[id] = id; });
+              const evtName = (rEvts || []).find(e => e.id === m.event_id)?.name || '';
+              return { ...m, _eventName: evtName };
+            });
+          }
+        }
+
+        setFullHistoryData({ player: playerData, tournaments: result, nameMap, refMatches, refRecord });
       } catch (err) { console.error(err); }
       finally { setFullHistoryLoading(false); }
     };
     load();
   }, [fullHistoryPlayerId]);
+
+  // Load referee profile when selected
+  useEffect(() => {
+    if (!selectedRefId) { setRefProfileData(null); return; }
+    const load = async () => {
+      setRefProfileLoading(true);
+      try {
+        const ref = allReferees.find(r => r.id === selectedRefId);
+        const { data: ms } = await supabase.from('matches').select('*')
+          .eq('referee_id', selectedRefId)
+          .in('status', ['finished', 'locked', 'in_progress'])
+          .order('started_at', { ascending: false });
+
+        // Get event names
+        const eventIds = [...new Set((ms || []).map(m => m.event_id))];
+        const { data: evts } = eventIds.length > 0
+          ? await supabase.from('events').select('id, name').in('id', eventIds)
+          : { data: [] };
+        const evtMap = {};
+        (evts || []).forEach(e => { evtMap[e.id] = e.name; });
+
+        // Get player names
+        const allPids = new Set();
+        (ms || []).forEach(m => {
+          (m.side_a || []).forEach(id => allPids.add(id));
+          (m.side_b || []).forEach(id => allPids.add(id));
+        });
+        const { data: pNames } = allPids.size > 0
+          ? await supabase.from('players').select('id, name').in('id', [...allPids])
+          : { data: [] };
+        const nameMap = {};
+        (pNames || []).forEach(p => { nameMap[p.id] = p.name; });
+
+        setRefProfileData({
+          referee: ref,
+          matches: (ms || []).map(m => ({ ...m, _eventName: evtMap[m.event_id] || '' })),
+          nameMap,
+        });
+      } catch (err) { console.error(err); }
+      finally { setRefProfileLoading(false); }
+    };
+    load();
+  }, [selectedRefId, allReferees]);
 
   const loadData = async () => {
     try {
@@ -95,6 +177,7 @@ export default function PublicView({ onLogin }) {
 
   const selectTournament = async (tournament) => {
     setSelectedTournament(tournament);
+    selectedTournamentObjRef.current = tournament;
     setLoading(true);
     try {
       // Load tournament pool players
@@ -123,11 +206,28 @@ export default function PublicView({ onLogin }) {
       }
       setMatches(allMatches);
       setGroups(allGroups);
+
+      // Load referees
+      const { data: refs } = await supabase.from('referees').select('id, display_name, username, player_id');
+      setAllReferees(refs || []);
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Lightweight reload for realtime — only refetch matches, not players/events/groups
+  const reloadMatchesOnly = async (tournament) => {
+    try {
+      const evts = events.length > 0 ? events : await TournamentService.getEvents(tournament.id);
+      const allMatches = [];
+      for (const evt of evts) {
+        const eventMatches = await MatchService.getByEvent(evt.id);
+        allMatches.push(...eventMatches.map(m => ({ ...m, _eventName: evt.name, _eventType: evt.type, _eventFormat: evt.format })));
+      }
+      setMatches(allMatches);
+    } catch (err) { console.error('Realtime reload error:', err); }
   };
 
   // Helpers
@@ -139,6 +239,12 @@ export default function PublicView({ onLogin }) {
   const sideLabel = (sideArr) => {
     if (!sideArr || sideArr.length === 0) return 'TBD';
     return sideArr.map(playerName).join(' & ');
+  };
+
+  const refereeName = (refId) => {
+    if (!refId) return null;
+    const ref = allReferees.find(r => r.id === refId);
+    return ref?.display_name || ref?.username || null;
   };
 
   const stageLabel = (s) => ({
@@ -308,6 +414,7 @@ export default function PublicView({ onLogin }) {
                             </div>
                             {m.status === 'in_progress' && <span className="pub-live-badge">LIVE</span>}
                             {finished && <span className={`pub-result-badge ${won ? 'win' : 'loss'}`}>{won ? 'W' : 'L'}</span>}
+                            {refereeName(m.referee_id) && <div className="pub-match-mini-ref" onClick={(e) => { e.stopPropagation(); setSelectedRefId(m.referee_id); }} style={{ cursor: "pointer" }}>🏅 <span className="pub-ref-clickable">{refereeName(m.referee_id)}</span></div>}
                           </div>
                         );
                       })}
@@ -315,6 +422,37 @@ export default function PublicView({ onLogin }) {
                   )}
                 </div>
               ))}
+
+              {/* Referee Record */}
+              {fh.refMatches && fh.refMatches.length > 0 && (
+                <div style={{ marginTop: 32 }}>
+                  <h3 style={{ fontSize: 16, marginBottom: 12 }}>🏅 Referee Record</h3>
+                  <div className="pub-history-summary" style={{ marginBottom: 16 }}>
+                    <div className="pub-profile-stat">
+                      <span className="pub-profile-stat-num">{fh.refMatches.length}</span>
+                      <span className="pub-profile-stat-label">Matches Refereed</span>
+                    </div>
+                  </div>
+                  <div className="pub-history-matches">
+                    {fh.refMatches.map(m => {
+                      const rSide = (side) => (side || []).map(id => fh.nameMap[id] || '?').join(' & ');
+                      return (
+                        <div key={m.id} className="pub-match-mini">
+                          <div className="pub-match-mini-header">
+                            <span className="pub-match-mini-event">{m._eventName}</span>
+                            <span className="pub-match-mini-stage">{m.status === 'in_progress' ? 'LIVE' : '✓'}</span>
+                          </div>
+                          <div className="pub-match-mini-sides">
+                            <span className={m.winner === 'side_a' ? 'won' : ''}>{rSide(m.side_a)}</span>
+                            <span className="pub-match-mini-score">{m.score_data?.sets ? scoreDisplay(m) : 'vs'}</span>
+                            <span className={m.winner === 'side_b' ? 'won' : ''}>{rSide(m.side_b)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -345,7 +483,7 @@ export default function PublicView({ onLogin }) {
         ) : selectedTournament ? (
           <div className="pub-header-tournament">{selectedTournament.name}</div>
         ) : null}
-        <button className="pub-login-btn" onClick={onLogin}>Admin</button>
+        <button className="pub-login-btn" onClick={onLogin}>Login</button>
       </header>
 
       {/* Player profile overlay */}
@@ -411,6 +549,7 @@ export default function PublicView({ onLogin }) {
                       {(m.status === 'finished' || m.status === 'locked') && (
                         <span className={`pub-result-badge ${won ? 'win' : 'loss'}`}>{won ? 'W' : 'L'}</span>
                       )}
+                      {refereeName(m.referee_id) && <div className="pub-match-mini-ref" onClick={(e) => { e.stopPropagation(); setSelectedRefId(m.referee_id); }} style={{ cursor: "pointer" }}>🏅 <span className="pub-ref-clickable">{refereeName(m.referee_id)}</span></div>}
                     </div>
                   );
                 })}
@@ -420,6 +559,69 @@ export default function PublicView({ onLogin }) {
             <button className="pub-full-history-btn" onClick={() => { setFullHistoryPlayerId(selectedPlayerId); setSelectedPlayerId(null); }}>
               📊 View Full History Across All Tournaments
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Referee Profile Overlay */}
+      {selectedRefId && (
+        <div className="pub-overlay" onClick={() => setSelectedRefId(null)}>
+          <div className="pub-profile-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 500 }}>
+            <button className="pub-profile-close" onClick={() => setSelectedRefId(null)}>✕</button>
+            {refProfileLoading ? (
+              <div className="admin-loading" style={{ padding: 40 }}>Loading...</div>
+            ) : refProfileData ? (
+              <>
+                <div className="pub-profile-header">
+                  <h3 className="pub-profile-name">🏅 {refProfileData.referee?.display_name || refProfileData.referee?.username}</h3>
+                  <div className="pub-profile-meta">
+                    <span className="pub-profile-badge">Referee</span>
+                    {refProfileData.referee?.player_id && (
+                      <span className="pub-profile-badge" style={{ cursor: 'pointer', borderColor: '#d4a843', color: '#d4a843' }}
+                        onClick={() => { setSelectedRefId(null); setSelectedPlayerId(refProfileData.referee.player_id); }}>
+                        View Player Profile →
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="pub-profile-stats">
+                  <div className="pub-profile-stat">
+                    <span className="pub-profile-stat-num">{refProfileData.matches.length}</span>
+                    <span className="pub-profile-stat-label">Matches Refereed</span>
+                  </div>
+                </div>
+                <div className="pub-profile-matches-title">Match History</div>
+                {refProfileData.matches.length === 0 ? (
+                  <p style={{ color: '#555', fontSize: 13 }}>No matches refereed yet.</p>
+                ) : (
+                  <div className="pub-profile-matches">
+                    {refProfileData.matches.map(m => {
+                      const rNameMap = refProfileData.nameMap;
+                      const rSideLabel = (side) => (side || []).map(id => rNameMap[id] || '?').join(' & ');
+                      return (
+                        <div key={m.id} className="pub-match-mini">
+                          <div className="pub-match-mini-header">
+                            <span className="pub-match-mini-event">{m._eventName}</span>
+                            <span className="pub-match-mini-stage">
+                              {m.status === 'in_progress' ? 'LIVE' : '✓'}
+                            </span>
+                          </div>
+                          <div className="pub-match-mini-sides">
+                            <span className={m.winner === 'side_a' ? 'won' : ''}>{rSideLabel(m.side_a)}</span>
+                            <span className="pub-match-mini-score">
+                              {m.score_data?.sets ? scoreDisplay(m) : 'vs'}
+                            </span>
+                            <span className={m.winner === 'side_b' ? 'won' : ''}>{rSideLabel(m.side_b)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            ) : (
+              <p style={{ color: '#555', padding: 20 }}>Could not load referee profile.</p>
+            )}
           </div>
         </div>
       )}
@@ -475,6 +677,7 @@ export default function PublicView({ onLogin }) {
                         </span>
                       </div>
                     </div>
+                    {refereeName(m.referee_id) && <div className="pub-match-referee" onClick={() => setSelectedRefId(m.referee_id)} style={{ cursor: "pointer" }}>Referee: <span className="pub-ref-clickable">{refereeName(m.referee_id)}</span></div>}
                   </div>
                 ))}
               </div>
@@ -500,6 +703,7 @@ export default function PublicView({ onLogin }) {
                         </span>
                       </div>
                     </div>
+                    {refereeName(m.referee_id) && <div className="pub-match-referee" onClick={() => setSelectedRefId(m.referee_id)} style={{ cursor: "pointer" }}>Referee: <span className="pub-ref-clickable">{refereeName(m.referee_id)}</span></div>}
                   </div>
                 ))}
               </div>
@@ -525,6 +729,7 @@ export default function PublicView({ onLogin }) {
                         </span>
                       </div>
                     </div>
+                    {refereeName(m.referee_id) && <div className="pub-match-referee" onClick={() => setSelectedRefId(m.referee_id)} style={{ cursor: "pointer" }}>Referee: <span className="pub-ref-clickable">{refereeName(m.referee_id)}</span></div>}
                   </div>
                 ))}
               </div>

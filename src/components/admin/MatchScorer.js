@@ -1,12 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
+import { RealtimeService } from '../../services/RealtimeService';
 import './MatchScorer.css';
 
-export default function MatchScorer({ matchId, allPlayers, onBack }) {
+const AUTO_LOCK_MINUTES = 5;
+
+export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = true }) {
   const [match, setMatch] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [lockCountdown, setLockCountdown] = useState(null);
 
   const loadMatch = useCallback(async () => {
     try {
@@ -17,16 +21,60 @@ export default function MatchScorer({ matchId, allPlayers, onBack }) {
         .single();
       if (err) throw err;
       setMatch(data);
+
+      // Auto-lock check: if finished and past 5 minutes, lock it
+      if (data.status === 'finished' && data.finished_at && isAdmin) {
+        const elapsed = (Date.now() - new Date(data.finished_at).getTime()) / 1000;
+        if (elapsed >= AUTO_LOCK_MINUTES * 60) {
+          await supabase.from('matches').update({
+            status: 'locked',
+            locked_at: new Date().toISOString(),
+          }).eq('id', matchId);
+          setMatch({ ...data, status: 'locked' });
+        }
+      }
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [matchId]);
+  }, [matchId, isAdmin]);
 
   useEffect(() => {
     loadMatch();
-  }, [loadMatch]);
+
+    // Subscribe to live updates for this match
+    const unsub = RealtimeService.subscribeToMatch(matchId, (updated) => {
+      setMatch(updated);
+    });
+    return () => unsub();
+  }, [loadMatch, matchId]);
+
+  // Countdown timer for auto-lock
+  useEffect(() => {
+    if (!match || match.status !== 'finished' || !match.finished_at) {
+      setLockCountdown(null);
+      return;
+    }
+    const updateCountdown = () => {
+      const elapsed = (Date.now() - new Date(match.finished_at).getTime()) / 1000;
+      const remaining = AUTO_LOCK_MINUTES * 60 - elapsed;
+      if (remaining <= 0) {
+        setLockCountdown(0);
+        if (isAdmin) {
+          supabase.from('matches').update({
+            status: 'locked',
+            locked_at: new Date().toISOString(),
+          }).eq('id', matchId);
+        }
+      } else {
+        setLockCountdown(Math.ceil(remaining));
+      }
+    };
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [match?.status, match?.finished_at, matchId, isAdmin]);
 
   const playerName = (id) => {
     if (!id) return 'BYE';
@@ -327,10 +375,34 @@ export default function MatchScorer({ matchId, allPlayers, onBack }) {
           </button>
         )}
 
-        {match.status === 'finished' && (
-          <button className="scorer-btn lock" onClick={lockMatch} disabled={saving}>
-            🔒 Lock Match
-          </button>
+        {match.status === 'finished' && isAdmin && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <button className="scorer-btn lock" onClick={lockMatch} disabled={saving}>
+              🔒 Lock Match
+            </button>
+            {lockCountdown !== null && lockCountdown > 0 && (
+              <span style={{ fontSize: 12, color: '#d4a843' }}>
+                Auto-locks in {Math.floor(lockCountdown / 60)}:{String(lockCountdown % 60).padStart(2, '0')}
+              </span>
+            )}
+          </div>
+        )}
+
+        {match.status === 'finished' && !isAdmin && (
+          <div style={{ fontSize: 12, color: '#888', textAlign: 'center', padding: '8px 0' }}>
+            Match finished — waiting for admin to lock
+            {lockCountdown !== null && lockCountdown > 0 && (
+              <span style={{ color: '#d4a843', marginLeft: 8 }}>
+                ({Math.floor(lockCountdown / 60)}:{String(lockCountdown % 60).padStart(2, '0')})
+              </span>
+            )}
+          </div>
+        )}
+
+        {match.status === 'locked' && (
+          <div style={{ fontSize: 13, color: '#4ecb71', textAlign: 'center', padding: '8px 0', fontWeight: 600 }}>
+            🔒 Match locked
+          </div>
         )}
       </div>
 

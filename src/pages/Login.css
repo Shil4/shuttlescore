@@ -131,3 +131,10 @@
 .login-back-btn:hover {
   color: #d4a843;
 }
+
+/* Login tabs */
+.login-tabs { display: flex; gap: 0; margin-bottom: 20px; border-radius: 8px; overflow: hidden; border: 1px solid #2a2a3a; }
+.login-tab { flex: 1; padding: 10px 16px; background: #14141f; border: none; color: #888; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.login-tab:first-child { border-right: 1px solid #2a2a3a; }
+.login-tab.active { background: #1e1e2e; color: #d4a843; }
+.login-tab:hover:not(.active) { background: #1a1a2a; color: #ccc; }

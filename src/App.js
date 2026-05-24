@@ -3,10 +3,11 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import PublicView from './components/public/PublicView';
+import RefereeView from './components/referee/RefereeView';
 import './App.css';
 
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { user, referee, loading } = useAuth();
   const [showLogin, setShowLogin] = useState(false);
 
   if (loading) {
@@ -20,9 +21,14 @@ function AppContent() {
     );
   }
 
-  // Logged in → show dashboard
+  // Admin logged in → dashboard
   if (user) {
     return <Dashboard />;
+  }
+
+  // Referee logged in → referee view
+  if (referee) {
+    return <RefereeView />;
   }
 
   // Show login page if requested

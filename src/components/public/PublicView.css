@@ -262,3 +262,9 @@
 .pub-history-tournament-header h3 { margin: 0; font-size: 15px; font-weight: 700; }
 .pub-history-tournament-date { font-size: 12px; color: #666; }
 .pub-history-matches { display: flex; flex-direction: column; gap: 6px; padding-left: 8px; }
+
+/* Referee display on match cards */
+.pub-match-referee { font-size: 11px; color: #888; margin-top: 6px; padding-top: 6px; border-top: 1px solid #1e1e2e; }
+.pub-match-mini-ref { font-size: 10px; color: #888; margin-top: 4px; }
+.pub-ref-clickable { text-decoration: underline; text-decoration-style: dotted; color: #d4a843; }
+.pub-ref-clickable:hover { color: #f0c060; }
