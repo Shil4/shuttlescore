@@ -91,6 +91,9 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
   const currentSet = scoreData?.sets?.[currentSetIndex];
   const sets = scoreData?.sets || [];
 
+  // Track if score has been edited after finish (needs re-save)
+  const [editedAfterFinish, setEditedAfterFinish] = useState(false);
+
   // Add point
   const addPoint = async (side) => {
     if (!match || saving) return;
@@ -106,19 +109,16 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
       set[pointKey]++;
       set.point_log.push({ scorer: side, timestamp: new Date().toISOString() });
 
-      let winner = match.winner;
-      if (match.status === 'finished') {
-        winner = calculateWinner(newScoreData);
-      }
-
+      // Don't recalculate winner during edits — wait for explicit save
       const { data, error: err } = await supabase
         .from('matches')
-        .update({ score_data: newScoreData, winner })
+        .update({ score_data: newScoreData })
         .eq('id', matchId)
         .select()
         .single();
       if (err) throw err;
       setMatch(data);
+      if (match.status === 'finished') setEditedAfterFinish(true);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -141,19 +141,16 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
       const pointKey = lastPoint.scorer === 'side_a' ? 'side_a_points' : 'side_b_points';
       set[pointKey] = Math.max(0, set[pointKey] - 1);
 
-      let winner = match.winner;
-      if (match.status === 'finished') {
-        winner = calculateWinner(newScoreData);
-      }
-
+      // Don't recalculate winner during edits
       const { data, error: err } = await supabase
         .from('matches')
-        .update({ score_data: newScoreData, winner })
+        .update({ score_data: newScoreData })
         .eq('id', matchId)
         .select()
         .single();
       if (err) throw err;
       setMatch(data);
+      if (match.status === 'finished') setEditedAfterFinish(true);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -203,6 +200,41 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
         .single();
       if (err) throw err;
       setMatch(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Save score changes after editing a finished match
+  const saveScoreChanges = async () => {
+    if (!match || saving) return;
+    if (match.status !== 'finished') return;
+
+    const winner = calculateWinner(match.score_data);
+    if (winner === 'tied') {
+      setError('Result is tied — adjust scores or add another set.');
+      return;
+    }
+    if (winner === 'no_data') {
+      setError('No score data.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    try {
+      const { data, error: err } = await supabase
+        .from('matches')
+        .update({ winner })
+        .eq('id', matchId)
+        .select()
+        .single();
+      if (err) throw err;
+      setMatch(data);
+      setEditedAfterFinish(false);
+      setSuccess && setError(''); // clear any errors
     } catch (err) {
       setError(err.message);
     } finally {
@@ -375,12 +407,22 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
           </button>
         )}
 
+        {match.status === 'finished' && editedAfterFinish && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <button className="scorer-btn finish" onClick={saveScoreChanges} disabled={saving} style={{ background: '#d4a843', flex: 1 }}>
+              💾 Save Score Changes
+            </button>
+            <span style={{ fontSize: 11, color: '#d4a843' }}>Score edited — save to update result</span>
+          </div>
+        )}
+
         {match.status === 'finished' && isAdmin && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <button className="scorer-btn lock" onClick={lockMatch} disabled={saving}>
+            <button className="scorer-btn lock" onClick={lockMatch} disabled={saving || editedAfterFinish}>
               🔒 Lock Match
             </button>
-            {lockCountdown !== null && lockCountdown > 0 && (
+            {editedAfterFinish && <span style={{ fontSize: 11, color: '#e85454' }}>Save changes before locking</span>}
+            {!editedAfterFinish && lockCountdown !== null && lockCountdown > 0 && (
               <span style={{ fontSize: 12, color: '#d4a843' }}>
                 Auto-locks in {Math.floor(lockCountdown / 60)}:{String(lockCountdown % 60).padStart(2, '0')}
               </span>
