@@ -202,4 +202,27 @@ export const TournamentService = {
     if (error) throw error;
     return data;
   },
+
+  async addCourt(tournamentId, courtName) {
+    const { data, error } = await supabase
+      .from('courts')
+      .insert({ id: courtName, tournament_id: tournamentId });
+    if (error) throw error;
+    return data;
+  },
+
+  async removeCourt(tournamentId, courtId) {
+    // Unassign any matches from this court first
+    await supabase
+      .from('matches')
+      .update({ court_id: null })
+      .eq('court_id', courtId);
+
+    const { error } = await supabase
+      .from('courts')
+      .delete()
+      .eq('id', courtId)
+      .eq('tournament_id', tournamentId);
+    if (error) throw error;
+  },
 };

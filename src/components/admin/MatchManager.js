@@ -16,8 +16,9 @@ export default function MatchManager() {
   const [selectedEventId, setSelectedEventId] = useState('all');
   const [matches, setMatches] = useState([]);
   const [allPlayers, setAllPlayers] = useState([]);
-  const [allGroups, setAllGroups] = useState([]);
+  const [allGroups, setAllGroups] = useState([]); // eslint-disable-line no-unused-vars
   const [allReferees, setAllReferees] = useState([]);
+  const [allCourts, setAllCourts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -41,6 +42,7 @@ export default function MatchManager() {
       }
     });
     return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadTournaments = async () => {
@@ -67,6 +69,8 @@ export default function MatchManager() {
     try {
       const evts = await TournamentService.getEvents(tournament.id);
       setEvents(evts);
+      const { data: c } = await supabase.from('courts').select('*').eq('tournament_id', tournament.id).order('id');
+      setAllCourts(c || []);
       await loadMatches(tournament.id);
     } catch (err) {
       setError(err.message);
@@ -157,6 +161,16 @@ export default function MatchManager() {
       if (updateErr) { setError('Failed to assign referee: ' + updateErr.message); return; }
       await loadMatches(selectedTournament.id);
     } catch (err) { setError('Failed to assign referee: ' + err.message); }
+  };
+
+  // Assign court to match
+  const handleAssignCourt = async (matchId, courtId) => {
+    try {
+      setError('');
+      const { error: updateErr } = await supabase.from('matches').update({ court_id: courtId || null }).eq('id', matchId);
+      if (updateErr) { setError('Failed to assign court: ' + updateErr.message); return; }
+      await loadMatches(selectedTournament.id);
+    } catch (err) { setError('Failed to assign court: ' + err.message); }
   };
 
   // Start match — requires referee assignment OR admin-as-referee
@@ -389,9 +403,11 @@ export default function MatchManager() {
                   <span className="match-event-name">
                     {m._eventName}
                     {m._groupName && <span style={{ color: '#888', fontWeight: 400 }}>{' · '}{m._groupName}</span>}
+                    {m.court_id && <span style={{ color: '#666', fontWeight: 400 }}>{' · 🏟️ '}{m.court_id}</span>}
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontSize: 10, color: '#555' }}>{stageLabel(m.stage)}</span>
+                    {m.override_log?.length > 0 && <span title={`${m.override_log.length} override(s)`} style={{ fontSize: 10, color: '#d4a843' }}>✏️{m.override_log.length}</span>}
                     {statusBadge(m.status)}
                   </div>
                 </div>
@@ -446,6 +462,18 @@ export default function MatchManager() {
                     </>
                   )}
                 </div>
+                {/* Court assignment */}
+                <div className="match-referee-row">
+                  {m.status === 'pending' && allCourts.length > 0 ? (
+                    <select value={m.court_id || ''} onChange={e => handleAssignCourt(m.id, e.target.value)}
+                      className="match-referee-select" style={{ maxWidth: 160 }}>
+                      <option value="">Assign court...</option>
+                      {allCourts.map(c => <option key={c.id} value={c.id}>{c.id}</option>)}
+                    </select>
+                  ) : m.court_id ? (
+                    <span style={{ fontSize: 12, color: '#888' }}>🏟️ {m.court_id}</span>
+                  ) : null}
+                </div>
                 <div className="match-card-actions">
                   {section.key === 'ready' && (
                     <button className="admin-btn primary" onClick={() => handleStartMatch(m.id)} style={{ fontSize: 12, padding: '5px 12px' }}>
@@ -477,6 +505,11 @@ export default function MatchManager() {
                         ⚠️ False Start
                       </button>
                     </>
+                  )}
+                  {m.status === 'locked' && (
+                    <button className="admin-btn secondary" onClick={() => setScoringMatchId(m.id)} style={{ fontSize: 12, padding: '5px 12px', color: '#d4a843' }}>
+                      🔓 Admin Override
+                    </button>
                   )}
                 </div>
               </div>

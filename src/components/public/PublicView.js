@@ -678,6 +678,7 @@ export default function PublicView({ onLogin }) {
                       </div>
                     </div>
                     {refereeName(m.referee_id) && <div className="pub-match-referee" onClick={() => setSelectedRefId(m.referee_id)} style={{ cursor: "pointer" }}>Referee: <span className="pub-ref-clickable">{refereeName(m.referee_id)}</span></div>}
+                    {m.court_id && <div style={{ fontSize: 11, color: '#888', textAlign: 'center', marginTop: 2 }}>🏟️ {m.court_id}</div>}
                   </div>
                 ))}
               </div>
@@ -689,7 +690,7 @@ export default function PublicView({ onLogin }) {
                 <h3 className="pub-section-title">Recent Results</h3>
                 {recentResults.map(m => (
                   <div key={m.id} className="pub-match-card">
-                    <div className="pub-match-event">{m._eventName} — {stageLabel(m.stage)}</div>
+                    <div className="pub-match-event">{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ` · ${m.court_id}` : ''}</div>
                     <div className="pub-match-body">
                       <div className={`pub-match-side ${m.winner === 'side_a' ? 'winner' : ''}`}>
                         <span className="pub-match-name clickable" onClick={() => m.side_a?.[0] && setSelectedPlayerId(m.side_a[0])}>
@@ -715,7 +716,7 @@ export default function PublicView({ onLogin }) {
                 <h3 className="pub-section-title">Upcoming</h3>
                 {upcomingMatches.map(m => (
                   <div key={m.id} className="pub-match-card upcoming">
-                    <div className="pub-match-event">{m._eventName} — {stageLabel(m.stage)}</div>
+                    <div className="pub-match-event">{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ` · ${m.court_id}` : ''}</div>
                     <div className="pub-match-body">
                       <div className="pub-match-side">
                         <span className="pub-match-name clickable" onClick={() => m.side_a?.[0] && setSelectedPlayerId(m.side_a[0])}>

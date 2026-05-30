@@ -26,6 +26,8 @@ export default function TournamentManager() {
   const [removeMode, setRemoveMode] = useState(false);
   const [removeSelected, setRemoveSelected] = useState(new Set());
   const [poolSearch, setPoolSearch] = useState('');
+  const [courts, setCourts] = useState([]);
+  const [newCourtName, setNewCourtName] = useState('');
 
   useEffect(() => { loadTournaments(); }, []);
 
@@ -62,13 +64,15 @@ export default function TournamentManager() {
   const loadPool = async (tid) => {
     setPoolLoading(true);
     try {
-      const [{ data: p }, { data: f }, { data: tp }] = await Promise.all([
+      const [{ data: p }, { data: f }, { data: tp }, { data: c }] = await Promise.all([
         supabase.from('players').select('*').order('name'),
         supabase.from('player_folders').select('*').order('sort_order').order('name'),
         supabase.from('tournament_players').select('player_id').eq('tournament_id', tid),
+        supabase.from('courts').select('*').eq('tournament_id', tid).order('id'),
       ]);
       setAllPlayers(p || []); setAllFolders(f || []);
       setTournamentPlayerIds(new Set((tp || []).map(r => r.player_id)));
+      setCourts(c || []);
 
       const events = await TournamentService.getEvents(tid);
       const inEvents = new Set();
@@ -161,7 +165,38 @@ export default function TournamentManager() {
 
   const togglePoolFolder = (fid) => { setExpandedPoolFolders(prev => { const n = new Set(prev); if (n.has(fid)) n.delete(fid); else n.add(fid); return n; }); };
 
-  const statusColor = (s) => ({ draft: '#888', in_progress: '#4ecb71', completed: '#d4a843' }[s] || '#888');
+  // ── Court Management ──
+  const handleAddCourt = async () => {
+    const name = newCourtName.trim();
+    if (!name) return;
+    try {
+      await TournamentService.addCourt(expandedTournamentId, name);
+      setNewCourtName('');
+      const { data: c } = await supabase.from('courts').select('*').eq('tournament_id', expandedTournamentId).order('id');
+      setCourts(c || []);
+    } catch (err) { setError(err.message); }
+  };
+
+  const handleRemoveCourt = async (courtId) => {
+    if (!window.confirm(`Remove "${courtId}"? Matches assigned to it will be unassigned.`)) return;
+    try {
+      await TournamentService.removeCourt(expandedTournamentId, courtId);
+      const { data: c } = await supabase.from('courts').select('*').eq('tournament_id', expandedTournamentId).order('id');
+      setCourts(c || []);
+    } catch (err) { setError(err.message); }
+  };
+
+  // ── Tournament Lifecycle ──
+  const handleStatusTransition = async (tournamentId, newStatus) => {
+    const labels = { in_progress: 'start', completed: 'complete' };
+    if (!window.confirm(`Are you sure you want to ${labels[newStatus] || 'change'} this tournament?`)) return;
+    try {
+      await TournamentService.update(tournamentId, { status: newStatus });
+      await loadTournaments();
+    } catch (err) { setError(err.message); }
+  };
+
+  const statusColor = (s) => ({ draft: '#888', registration: '#5b9bd5', in_progress: '#4ecb71', completed: '#d4a843' }[s] || '#888');
 
   if (loading) return <div className="admin-loading">Loading tournaments...</div>;
 
@@ -205,6 +240,12 @@ export default function TournamentManager() {
                 </div>
                 <div className="admin-list-right">
                   <span className="admin-status-badge" style={{ color: statusColor(t.status), borderColor: statusColor(t.status) }}>{t.status.replace('_', ' ')}</span>
+                  {t.status === 'draft' && (
+                    <button className="admin-btn small" style={{ color: '#4ecb71', borderColor: '#4ecb71' }} onClick={() => handleStatusTransition(t.id, 'in_progress')}>▶ Start</button>
+                  )}
+                  {t.status === 'in_progress' && (
+                    <button className="admin-btn small" style={{ color: '#d4a843', borderColor: '#d4a843' }} onClick={() => handleStatusTransition(t.id, 'completed')}>✓ Complete</button>
+                  )}
                   <button className="admin-btn small" onClick={() => handleEdit(t)}>Edit</button>
                   <button className="admin-btn small danger" onClick={() => handleDelete(t.id)}>Delete</button>
                 </div>
@@ -214,6 +255,28 @@ export default function TournamentManager() {
                 <div className="tournament-pool">
                   {poolLoading ? <div className="admin-loading">Loading...</div> : (
                     <>
+                      {/* Court Configuration */}
+                      <div style={{ marginBottom: 16, padding: '12px 14px', background: '#14141f', borderRadius: 8, border: '1px solid #1e1e2e' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: '#ccc' }}>🏟️ Courts ({courts.length})</span>
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                          {courts.map(c => (
+                            <span key={c.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', background: '#1a1a2e', border: '1px solid #2a2a3e', borderRadius: 6, fontSize: 12, color: '#ddd' }}>
+                              {c.id}
+                              <button onClick={() => handleRemoveCourt(c.id)} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: 11, padding: '0 2px' }} title="Remove court">✕</button>
+                            </span>
+                          ))}
+                          {courts.length === 0 && <span style={{ fontSize: 12, color: '#555' }}>No courts configured</span>}
+                        </div>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <input type="text" value={newCourtName} onChange={e => setNewCourtName(e.target.value)}
+                            placeholder="e.g. Court 3" onKeyDown={e => e.key === 'Enter' && handleAddCourt()}
+                            style={{ flex: 1, padding: '5px 10px', background: '#0d0d14', border: '1px solid #2a2a3e', borderRadius: 6, color: '#ddd', fontSize: 12 }} />
+                          <button className="admin-btn primary" onClick={handleAddCourt} disabled={!newCourtName.trim()} style={{ fontSize: 11, padding: '5px 10px' }}>+ Add</button>
+                        </div>
+                      </div>
+
                       <div className="pool-header">
                         <span className="pool-count">{poolPlayers.length} player{poolPlayers.length !== 1 ? 's' : ''}</span>
                         <button className="admin-btn primary" onClick={() => { setShowAddPlayers(!showAddPlayers); if (!showAddPlayers) { const all = new Set(); allFolders.forEach(f => all.add(f.id)); setExpandedPoolFolders(all); } }} style={{ fontSize: 12, padding: '5px 12px' }}>

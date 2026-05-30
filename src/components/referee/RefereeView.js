@@ -47,6 +47,7 @@ export default function RefereeView() {
       }
     });
     return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [referee]);
 
   const loadPlayersForSetup = async () => {
@@ -284,7 +285,7 @@ export default function RefereeView() {
                     <h3 className="ref-section-title">🔴 Live</h3>
                     {myLive.map(m => (
                       <div key={m.id} className="ref-match-card live">
-                        <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}</span><span className="ref-match-live">LIVE</span></div>
+                        <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ` · ${m.court_id}` : ''}</span><span className="ref-match-live">LIVE</span></div>
                         <div className="ref-match-sides">
                           <span>{sideLabel(m.side_a)}</span>
                           <span className="ref-match-score">{scoreDisplay(m) || 'vs'}</span>
@@ -302,7 +303,7 @@ export default function RefereeView() {
                     <h3 className="ref-section-title">📋 Upcoming</h3>
                     {myPending.map(m => (
                       <div key={m.id} className="ref-match-card">
-                        <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}</span></div>
+                        <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ` · ${m.court_id}` : ''}</span></div>
                         <div className="ref-match-sides">
                           <span>{sideLabel(m.side_a)}</span>
                           <span className="ref-match-vs">vs</span>
@@ -326,7 +327,7 @@ export default function RefereeView() {
                       const won = m.winner;
                       return (
                         <div key={m.id} className="ref-match-card done">
-                          <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}</span><span style={{ fontSize: 10, color: '#4ecb71' }}>✓</span></div>
+                          <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ` · ${m.court_id}` : ''}</span><span style={{ fontSize: 10, color: '#4ecb71' }}>✓</span></div>
                           <div className="ref-match-sides">
                             <span className={won === 'side_a' ? 'ref-winner' : ''}>{sideLabel(m.side_a)}</span>
                             <span className="ref-match-score">{scoreDisplay(m)}</span>
@@ -352,7 +353,7 @@ export default function RefereeView() {
                     <h3 className="ref-section-title">🔴 Live Matches</h3>
                     {liveMatches.map(m => (
                       <div key={m.id} className="ref-match-card live">
-                        <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}</span><span className="ref-match-live">LIVE</span></div>
+                        <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ` · ${m.court_id}` : ''}</span><span className="ref-match-live">LIVE</span></div>
                         <div className="ref-match-sides">
                           <span>{sideLabel(m.side_a)}</span>
                           <span className="ref-match-score">{scoreDisplay(m) || 'vs'}</span>
@@ -367,7 +368,7 @@ export default function RefereeView() {
                     <h3 className="ref-section-title">Recent Results</h3>
                     {recentResults.map(m => (
                       <div key={m.id} className="ref-match-card done">
-                        <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}</span></div>
+                        <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ` · ${m.court_id}` : ''}</span></div>
                         <div className="ref-match-sides">
                           <span className={m.winner === 'side_a' ? 'ref-winner' : ''}>{sideLabel(m.side_a)}</span>
                           <span className="ref-match-score">{scoreDisplay(m)}</span>
@@ -382,7 +383,7 @@ export default function RefereeView() {
                     <h3 className="ref-section-title">Upcoming</h3>
                     {upcomingMatches.map(m => (
                       <div key={m.id} className="ref-match-card">
-                        <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}</span></div>
+                        <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ` · ${m.court_id}` : ''}</span></div>
                         <div className="ref-match-sides">
                           <span>{sideLabel(m.side_a)}</span><span className="ref-match-vs">vs</span><span>{sideLabel(m.side_b)}</span>
                         </div>

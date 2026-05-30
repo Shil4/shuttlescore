@@ -12,6 +12,13 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
   const [saving, setSaving] = useState(false);
   const [lockCountdown, setLockCountdown] = useState(null);
 
+  // Admin override
+  const [overrideMode, setOverrideMode] = useState(false);
+  const [overridePassword, setOverridePassword] = useState('');
+  const [overrideReason, setOverrideReason] = useState('');
+  const [overrideUnlocked, setOverrideUnlocked] = useState(false);
+  const [overrideError, setOverrideError] = useState('');
+
   const loadMatch = useCallback(async () => {
     try {
       const { data, error: err } = await supabase
@@ -74,6 +81,7 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
     updateCountdown();
     const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [match?.status, match?.finished_at, matchId, isAdmin]);
 
   const playerName = (id) => {
@@ -97,7 +105,7 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
   // Add point
   const addPoint = async (side) => {
     if (!match || saving) return;
-    if (match.status !== 'in_progress' && match.status !== 'finished') return;
+    if (match.status !== 'in_progress' && match.status !== 'finished' && !(match.status === 'locked' && overrideUnlocked)) return;
 
     setSaving(true);
     setError('');
@@ -311,6 +319,146 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
     }
   };
 
+  // Admin override — verify password
+  const handleOverrideVerify = async () => {
+    setOverrideError('');
+    try {
+      const { data: config } = await supabase
+        .from('app_config')
+        .select('value')
+        .eq('key', 'override_password_hash')
+        .single();
+
+      if (!config || config.value === 'CHANGE_ME_TO_BCRYPT_HASH') {
+        setOverrideError('Override password not configured. Set it in Supabase app_config table.');
+        return;
+      }
+
+      if (overridePassword !== config.value) {
+        setOverrideError('Incorrect password.');
+        return;
+      }
+
+      setOverrideUnlocked(true);
+      setOverrideError('');
+      setEditedAfterFinish(false);
+    } catch (err) {
+      setOverrideError(err.message);
+    }
+  };
+
+  // Save override changes — re-lock with audit log
+  const handleOverrideSave = async () => {
+    if (!match || saving) return;
+    if (!overrideReason.trim()) {
+      setOverrideError('Please provide a reason for the override.');
+      return;
+    }
+
+    const winner = calculateWinner(match.score_data);
+    if (winner === 'tied') {
+      setOverrideError('Result is tied — adjust scores or add another set.');
+      return;
+    }
+    if (winner === 'no_data') {
+      setOverrideError('No score data.');
+      return;
+    }
+
+    setSaving(true);
+    setOverrideError('');
+    try {
+      const logEntry = {
+        admin_id: (await supabase.auth.getUser()).data.user?.id,
+        timestamp: new Date().toISOString(),
+        reason: overrideReason.trim(),
+        previous_state: {
+          score_data: match.score_data,
+          winner: match.winner,
+        },
+      };
+
+      const overrideLog = [...(match.override_log || []), logEntry];
+
+      const { data, error: err } = await supabase
+        .from('matches')
+        .update({
+          score_data: match.score_data,
+          winner,
+          override_log: overrideLog,
+          status: 'locked',
+          locked_at: new Date().toISOString(),
+        })
+        .eq('id', matchId)
+        .select()
+        .single();
+      if (err) throw err;
+      setMatch(data);
+      setOverrideUnlocked(false);
+      setOverrideMode(false);
+      setOverridePassword('');
+      setOverrideReason('');
+    } catch (err) {
+      setOverrideError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Override false start — revert locked match to pending
+  const handleOverrideFalseStart = async () => {
+    if (!match || saving) return;
+    if (!overrideReason.trim()) {
+      setOverrideError('Please provide a reason for the false start.');
+      return;
+    }
+    if (!window.confirm('Revert this match to pending? All scores will be cleared.')) return;
+
+    setSaving(true);
+    setOverrideError('');
+    try {
+      const logEntry = {
+        admin_id: (await supabase.auth.getUser()).data.user?.id,
+        timestamp: new Date().toISOString(),
+        reason: `FALSE START: ${overrideReason.trim()}`,
+        previous_state: {
+          score_data: match.score_data,
+          winner: match.winner,
+          status: match.status,
+        },
+      };
+
+      const overrideLog = [...(match.override_log || []), logEntry];
+
+      const { data, error: err } = await supabase
+        .from('matches')
+        .update({
+          status: 'pending',
+          score_data: null,
+          winner: null,
+          started_at: null,
+          finished_at: null,
+          locked_at: null,
+          duration_seconds: null,
+          override_log: overrideLog,
+        })
+        .eq('id', matchId)
+        .select()
+        .single();
+      if (err) throw err;
+      setMatch(data);
+      setOverrideUnlocked(false);
+      setOverrideMode(false);
+      setOverridePassword('');
+      setOverrideReason('');
+      setEditedAfterFinish(false);
+    } catch (err) {
+      setOverrideError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Calculate winner
   const calculateWinner = (sd) => {
     if (!sd?.sets?.length) return 'no_data';
@@ -329,7 +477,7 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
     return 'tied';
   };
 
-  const isEditable = match?.status === 'in_progress' || match?.status === 'finished';
+  const isEditable = match?.status === 'in_progress' || match?.status === 'finished' || (match?.status === 'locked' && overrideUnlocked);
 
   if (loading) return <div className="admin-loading">Loading match...</div>;
   if (!match) return <div className="admin-error">Match not found.</div>;
@@ -441,7 +589,62 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
           </div>
         )}
 
-        {match.status === 'locked' && (
+        {match.status === 'locked' && isAdmin && !overrideUnlocked && (
+          <div style={{ textAlign: 'center', padding: '8px 0' }}>
+            {!overrideMode ? (
+              <>
+                <div style={{ fontSize: 13, color: '#4ecb71', fontWeight: 600, marginBottom: 8 }}>🔒 Match locked</div>
+                <button className="scorer-btn" onClick={() => setOverrideMode(true)}
+                  style={{ fontSize: 12, color: '#d4a843', borderColor: '#d4a843' }}>
+                  🔓 Admin Override
+                </button>
+              </>
+            ) : (
+              <div style={{ background: '#1a1a2e', borderRadius: 8, padding: 16, textAlign: 'left' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#d4a843', marginBottom: 10 }}>Admin Override</div>
+                {overrideError && <div className="admin-error" style={{ marginBottom: 8, fontSize: 12 }}>{overrideError}</div>}
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 4 }}>Override Password</label>
+                  <input type="password" value={overridePassword} onChange={e => setOverridePassword(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleOverrideVerify()}
+                    placeholder="Enter override password"
+                    style={{ width: '100%', padding: '8px 12px', background: '#0d0d14', border: '1px solid #2a2a3e', borderRadius: 6, color: '#ddd', fontSize: 13 }} />
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="admin-btn primary" onClick={handleOverrideVerify} disabled={!overridePassword} style={{ fontSize: 12 }}>Verify</button>
+                  <button className="admin-btn secondary" onClick={() => { setOverrideMode(false); setOverridePassword(''); setOverrideError(''); }} style={{ fontSize: 12 }}>Cancel</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {match.status === 'locked' && overrideUnlocked && (
+          <div style={{ background: '#2a2215', border: '1px solid #d4a843', borderRadius: 8, padding: 12, marginTop: 4 }}>
+            <div style={{ fontSize: 12, color: '#d4a843', fontWeight: 600, marginBottom: 8 }}>🔓 Override active — edit scores above, then save with a reason</div>
+            {overrideError && <div className="admin-error" style={{ marginBottom: 8, fontSize: 12 }}>{overrideError}</div>}
+            <div style={{ marginBottom: 8 }}>
+              <label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 4 }}>Reason for override</label>
+              <input type="text" value={overrideReason} onChange={e => setOverrideReason(e.target.value)}
+                placeholder="e.g. Scoring error in set 2"
+                style={{ width: '100%', padding: '8px 12px', background: '#0d0d14', border: '1px solid #2a2a3e', borderRadius: 6, color: '#ddd', fontSize: 13 }} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="scorer-btn finish" onClick={handleOverrideSave} disabled={saving || !overrideReason.trim()} style={{ flex: 1, minWidth: 140 }}>
+                💾 Save Score & Re-lock
+              </button>
+              <button className="admin-btn danger" onClick={handleOverrideFalseStart} disabled={saving || !overrideReason.trim()}
+                style={{ fontSize: 12, padding: '8px 14px' }}>
+                ⚠️ False Start
+              </button>
+              <button className="admin-btn secondary" onClick={() => { setOverrideUnlocked(false); setOverrideMode(false); setOverridePassword(''); setOverrideReason(''); loadMatch(); }} style={{ fontSize: 12 }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {match.status === 'locked' && !isAdmin && (
           <div style={{ fontSize: 13, color: '#4ecb71', textAlign: 'center', padding: '8px 0', fontWeight: 600 }}>
             🔒 Match locked
           </div>
@@ -457,6 +660,31 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
               <span key={i} className={`scorer-log-dot ${p.scorer}`} title={`Point ${i + 1}: ${p.scorer === 'side_a' ? sideLabel(match.side_a) : sideLabel(match.side_b)}`} />
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Override log */}
+      {match.override_log?.length > 0 && (
+        <div style={{ marginTop: 16, padding: 12, background: '#1a1a2e', borderRadius: 8, border: '1px solid #2a2215' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#d4a843', marginBottom: 8 }}>📋 Override History ({match.override_log.length})</div>
+          {match.override_log.map((entry, i) => (
+            <div key={i} style={{ padding: '8px 0', borderTop: i > 0 ? '1px solid #2a2a3a' : 'none', fontSize: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                <span style={{ color: entry.reason?.startsWith('FALSE START') ? '#e85454' : '#d4a843', fontWeight: 600 }}>
+                  {entry.reason?.startsWith('FALSE START') ? '⚠️ ' : '✏️ '}{entry.reason || 'No reason'}
+                </span>
+                <span style={{ color: '#555' }}>
+                  {entry.timestamp ? new Date(entry.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+                </span>
+              </div>
+              {entry.previous_state?.score_data?.sets && (
+                <div style={{ color: '#666', fontSize: 11 }}>
+                  Previous: {entry.previous_state.score_data.sets.map((s, j) => `Set ${j + 1}: ${s.side_a_points}-${s.side_b_points}`).join(', ')}
+                  {entry.previous_state.winner && ` → ${entry.previous_state.winner}`}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
