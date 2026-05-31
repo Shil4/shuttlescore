@@ -39,6 +39,9 @@ export default function DrawManager() {
   const [showByeSelector, setShowByeSelector] = useState(null);
   const [byeSearch, setByeSearch] = useState('');
   const [expandedStageId, setExpandedStageId] = useState(null);
+  const [stageDateLocal, setStageDateLocal] = useState({});
+
+  const formatDate = (d) => { if (!d) return ''; const p = d.split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : d; };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadTournaments(); }, []);
@@ -171,6 +174,44 @@ export default function DrawManager() {
   const handleAddBye = async (sid, p) => { try { await DrawService.addBye(sid, p.playerIds[0], p.playerIds.length > 1 ? p.playerIds[1] : null); await loadStageData(selectedEvent.id); } catch (err) { setError(err.message); } };
   const handleRemoveBye = async (bid) => { try { await DrawService.removeBye(bid); await loadStageData(selectedEvent.id); } catch (err) { setError(err.message); } };
   const handleClearAll = async () => { if (!window.confirm('Clear ALL draws?')) return; try { await DrawService.clearEventDraw(selectedEvent.id); await loadStageData(selectedEvent.id); setSuccess('Cleared'); } catch (err) { setError(err.message); } };
+
+  // ── Stage Date (cascading) ──
+  const handleStageDate = async (stageId, date) => {
+    try {
+      setError('');
+      const stage = stages.find(s => s.id === stageId);
+      if (!stage) return;
+      // Update this stage
+      await supabase.from('event_stages').update({ start_date: date || null }).eq('id', stageId);
+      // Update matches in this stage
+      if (date) await supabase.from('matches').update({ scheduled_date: date }).eq('stage_id', stageId);
+      // Cascade to later stages: set their date if unset or earlier
+      for (const ls of stages.filter(s => s.stage_number > stage.stage_number)) {
+        if (date && (!ls.start_date || ls.start_date < date)) {
+          await supabase.from('event_stages').update({ start_date: date }).eq('id', ls.id);
+          await supabase.from('matches').update({ scheduled_date: date }).eq('stage_id', ls.id);
+        }
+      }
+      await loadStageData(selectedEvent.id);
+      setStageDateLocal({});
+      setSuccess('Date updated');
+    } catch (err) { setError(err.message); }
+  };
+
+  // ── Elimination Swap ──
+  const [swapSel, setSwapSel] = useState(null); // { matchId, side }
+
+  const handleElimSwapClick = async (matchId, side, stage) => {
+    if (!swapSel) { setSwapSel({ matchId, side }); return; }
+    if (swapSel.matchId === matchId && swapSel.side === side) { setSwapSel(null); return; }
+    try {
+      setError('');
+      await DrawService.swapEliminationParticipants(swapSel.matchId, swapSel.side, matchId, side);
+      setSwapSel(null);
+      await loadStageData(selectedEvent.id);
+      setSuccess('Swapped');
+    } catch (err) { setError(err.message); }
+  };
 
   // ── Group Editing ──
   const startEditGroups = (stageId) => {
@@ -408,10 +449,18 @@ export default function DrawManager() {
             {isExpanded && (
               <div style={{ padding: '12px 16px' }}>
                 {/* Config */}
-                <div style={{ fontSize: 12, color: '#888', marginBottom: 12, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ fontSize: 12, color: '#888', marginBottom: 12, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                   {stage.stage_type === 'group' && <span>Groups of {cfg.target_group_size || 4} | Advance top {advCount}</span>}
                   {stage.stage_type === 'round_robin' && <span>Advance top {cfg.advancement_count || 2}</span>}
-                  {stage.stage_type === 'elimination' && cfg.third_place_match && <span>3rd place match</span>}
+                  {stage.stage_type === 'elimination' && cfg.third_place_match && <span>Bronze match</span>}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    {'\uD83D\uDCC5'}
+                    <input type="date" value={stageDateLocal[stage.id] ?? stage.start_date ?? ''}
+                      onChange={e => setStageDateLocal({ ...stageDateLocal, [stage.id]: e.target.value })}
+                      onBlur={e => { const v = e.target.value; if (v !== (stage.start_date || '')) handleStageDate(stage.id, v); }}
+                      style={{ background: '#0d0d14', border: '1px solid #2a2a3e', borderRadius: 4, color: '#aaa', fontSize: 11, padding: '2px 6px' }} />
+                    {stage.start_date && <span style={{ fontSize: 11, color: '#888' }}>{formatDate(stage.start_date)}</span>}
+                  </span>
                 </div>
 
                 {/* Byes */}
@@ -526,16 +575,30 @@ export default function DrawManager() {
                   </div>
                 )}
                 {!isEditing && hasMatches && stage.stage_type === 'elimination' && (
-                  <div style={{ marginBottom: 12 }}>{[...matches].sort((a, b) => {
+                  <div style={{ marginBottom: 12 }}>
+                    {!stageStarted && <div style={{ fontSize: 11, color: '#5b9bd5', marginBottom: 6 }}>Click two sides to swap their positions in the bracket</div>}
+                    {[...matches].sort((a, b) => {
                     const order = { quarterfinal: 1, semifinal: 2, third_place: 3, final: 4 };
                     const oa = order[a.stage] || 0, ob = order[b.stage] || 0;
-                    if (oa !== ob) return oa - ob;
-                    return (a.bracket_position || 0) - (b.bracket_position || 0);
+                    return oa !== ob ? oa - ob : (a.bracket_position || 0) - (b.bracket_position || 0);
                   }).map(m => {
                     const sc = (m.score_data?.sets || []).map(s => s.side_a_points + '-' + s.side_b_points).join(', ');
-                    return (<div key={m.id} style={{ display: 'flex', gap: 8, padding: '6px 0', borderBottom: '1px solid #1a1a2e', fontSize: 12 }}>
+                    const canSwap = !stageStarted && m.side_a && m.side_b;
+                    const selA = swapSel && swapSel.matchId === m.id && swapSel.side === 'side_a';
+                    const selB = swapSel && swapSel.matchId === m.id && swapSel.side === 'side_b';
+                    return (<div key={m.id} style={{ display: 'flex', gap: 8, padding: '6px 0', borderBottom: '1px solid #1a1a2e', fontSize: 12, alignItems: 'center' }}>
                       <span style={{ color: '#d4a843', fontWeight: 600, minWidth: 80 }}>{({ quarterfinal: 'QF', semifinal: 'Semi', third_place: 'Bronze', final: 'Final' }[m.stage]) || m.stage}</span>
-                      <span style={{ flex: 1 }}><span style={{ color: m.winner === 'side_a' ? '#4ecb71' : (m.side_a ? '#bbb' : '#555') }}>{sideLabel(m.side_a)}</span><span style={{ color: '#444' }}> vs </span><span style={{ color: m.winner === 'side_b' ? '#4ecb71' : (m.side_b ? '#bbb' : '#555') }}>{sideLabel(m.side_b)}</span></span>
+                      <span style={{ flex: 1 }}>
+                        <span onClick={() => canSwap && handleElimSwapClick(m.id, 'side_a', stage)}
+                          style={{ color: m.winner === 'side_a' ? '#4ecb71' : (m.side_a ? '#bbb' : '#555'), cursor: canSwap ? 'pointer' : 'default',
+                            background: selA ? '#2a3a2a' : 'transparent', padding: selA ? '2px 6px' : 0, borderRadius: 4, border: selA ? '1px solid #4ecb71' : 'none' }}>
+                          {sideLabel(m.side_a)}</span>
+                        <span style={{ color: '#444' }}> vs </span>
+                        <span onClick={() => canSwap && handleElimSwapClick(m.id, 'side_b', stage)}
+                          style={{ color: m.winner === 'side_b' ? '#4ecb71' : (m.side_b ? '#bbb' : '#555'), cursor: canSwap ? 'pointer' : 'default',
+                            background: selB ? '#2a3a2a' : 'transparent', padding: selB ? '2px 6px' : 0, borderRadius: 4, border: selB ? '1px solid #4ecb71' : 'none' }}>
+                          {sideLabel(m.side_b)}</span>
+                      </span>
                       <span style={{ color: '#888' }}>{sc || (m.default_win ? 'W/O' : '\u2014')}</span>
                     </div>);
                   })}</div>

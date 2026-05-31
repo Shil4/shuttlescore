@@ -252,15 +252,27 @@ export default function PublicView({ onLogin }) {
     quarterfinal: 'Quarterfinal', semifinal: 'Semifinal', third_place: 'Bronze', final: 'Final'
   }[s] || s);
 
-  const liveMatches = matches.filter(m => m.status === 'in_progress');
-  const recentResults = matches
+  const formatDate = (d) => { if (!d) return ''; const p = d.split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : d; };
+
+  const [overviewEventFilter, setOverviewEventFilter] = useState('all');
+  const [overviewStatusFilter, setOverviewStatusFilter] = useState('all');
+
+  const filteredOverviewMatches = matches.filter(m => {
+    if (overviewEventFilter !== 'all' && m.event_id !== overviewEventFilter) return false;
+    if (overviewStatusFilter === 'live' && m.status !== 'in_progress') return false;
+    if (overviewStatusFilter === 'upcoming' && m.status !== 'pending') return false;
+    if (overviewStatusFilter === 'results' && m.status !== 'finished' && m.status !== 'locked') return false;
+    return true;
+  });
+
+  const liveMatches = filteredOverviewMatches.filter(m => m.status === 'in_progress');
+  const recentResults = filteredOverviewMatches
     .filter(m => m.status === 'finished' || m.status === 'locked')
     .filter(m => m.side_a && m.side_b)
-    .sort((a, b) => new Date(b.finished_at || b.updated_at) - new Date(a.finished_at || a.updated_at))
-    .slice(0, 8);
-  const upcomingMatches = matches
+    .sort((a, b) => new Date(b.finished_at || b.updated_at) - new Date(a.finished_at || a.updated_at));
+  const upcomingMatches = filteredOverviewMatches
     .filter(m => m.status === 'pending' && m.side_a?.length > 0 && m.side_b?.length > 0)
-    .slice(0, 8);
+    .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
 
   // Event-filtered matches for bracket view
   const eventMatches = selectedEventId ? matches.filter(m => m.event_id === selectedEventId) : [];
@@ -378,7 +390,7 @@ export default function PublicView({ onLogin }) {
                 <div key={tournament.id} className="pub-history-tournament">
                   <div className="pub-history-tournament-header">
                     <h3>{tournament.name}</h3>
-                    <span className="pub-history-tournament-date">{tournament.start_date || ''}</span>
+                    <span className="pub-history-tournament-date">{formatDate(tournament.start_date) || ''}</span>
                   </div>
                   {tMatches.length === 0 ? (
                     <p style={{ color: '#555', fontSize: 13, padding: '8px 12px' }}>No matches in this tournament.</p>
@@ -635,7 +647,7 @@ export default function PublicView({ onLogin }) {
                 <h2 className="pub-tournament-name">{selectedTournament.name}</h2>
                 <div className="pub-tournament-meta">
                   {selectedTournament.venue && <span>📍 {selectedTournament.venue}</span>}
-                  {selectedTournament.start_date && <span>📅 {selectedTournament.start_date}{selectedTournament.end_date && selectedTournament.end_date !== selectedTournament.start_date ? ` — ${selectedTournament.end_date}` : ''}</span>}
+                  {selectedTournament.start_date && <span>{'\uD83D\uDCC5'} {formatDate(selectedTournament.start_date)}{selectedTournament.end_date && selectedTournament.end_date !== selectedTournament.start_date ? ' \u2014 ' + formatDate(selectedTournament.end_date) : ''}</span>}
                   <span>🏸 {events.length} events</span>
                 </div>
                 <div className="pub-tournament-events">
@@ -646,13 +658,29 @@ export default function PublicView({ onLogin }) {
               </div>
             )}
 
+            {/* Filters */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+              <select value={overviewEventFilter} onChange={e => setOverviewEventFilter(e.target.value)}
+                style={{ background: '#14141f', border: '1px solid #2a2a3e', borderRadius: 6, color: '#ccc', padding: '6px 10px', fontSize: 12 }}>
+                <option value="all">All Events</option>
+                {events.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+              {['all', 'live', 'upcoming', 'results'].map(f => (
+                <button key={f} onClick={() => setOverviewStatusFilter(f)}
+                  style={{ background: overviewStatusFilter === f ? '#2a2a3e' : 'transparent', border: '1px solid #2a2a3e', borderRadius: 6,
+                    color: overviewStatusFilter === f ? '#ddd' : '#888', padding: '5px 12px', fontSize: 12, cursor: 'pointer' }}>
+                  {f === 'all' ? 'All' : f === 'live' ? '\uD83D\uDD34 Live' : f === 'upcoming' ? 'Upcoming' : 'Results'}
+                </button>
+              ))}
+            </div>
+
             {/* Live matches */}
             {liveMatches.length > 0 && (
               <div className="pub-section">
                 <h3 className="pub-section-title"><span className="pub-live-dot" /> Live Now</h3>
                 {liveMatches.map(m => (
                   <div key={m.id} className="pub-match-card live">
-                    <div className="pub-match-event">{m._eventName} — {stageLabel(m.stage)}</div>
+                    <div className="pub-match-event">{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ' · ' + m.court_id : ''}{m.scheduled_date ? ' · ' + formatDate(m.scheduled_date) : ''}</div>
                     <div className="pub-match-body">
                       <div className="pub-match-side">
                         <span className="pub-match-name clickable" onClick={() => m.side_a?.[0] && setSelectedPlayerId(m.side_a[0])}>
@@ -679,15 +707,15 @@ export default function PublicView({ onLogin }) {
                 <h3 className="pub-section-title">Recent Results</h3>
                 {recentResults.map(m => (
                   <div key={m.id} className="pub-match-card">
-                    <div className="pub-match-event">{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ` · ${m.court_id}` : ''}</div>
+                    <div className="pub-match-event">{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ' · ' + m.court_id : ''}{m.scheduled_date ? ' · ' + formatDate(m.scheduled_date) : ''}</div>
                     <div className="pub-match-body">
-                      <div className={`pub-match-side ${m.winner === 'side_a' ? 'winner' : ''}`}>
+                      <div className={'pub-match-side ' + (m.winner === 'side_a' ? 'winner' : '')}>
                         <span className="pub-match-name clickable" onClick={() => m.side_a?.[0] && setSelectedPlayerId(m.side_a[0])}>
                           {sideLabel(m.side_a)}
                         </span>
                       </div>
                       <div className="pub-match-scores">{scoreDisplay(m)}</div>
-                      <div className={`pub-match-side right ${m.winner === 'side_b' ? 'winner' : ''}`}>
+                      <div className={'pub-match-side right ' + (m.winner === 'side_b' ? 'winner' : '')}>
                         <span className="pub-match-name clickable" onClick={() => m.side_b?.[0] && setSelectedPlayerId(m.side_b[0])}>
                           {sideLabel(m.side_b)}
                         </span>
@@ -705,7 +733,7 @@ export default function PublicView({ onLogin }) {
                 <h3 className="pub-section-title">Upcoming</h3>
                 {upcomingMatches.map(m => (
                   <div key={m.id} className="pub-match-card upcoming">
-                    <div className="pub-match-event">{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ` · ${m.court_id}` : ''}</div>
+                    <div className="pub-match-event">{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ' · ' + m.court_id : ''}{m.scheduled_date ? ' · ' + formatDate(m.scheduled_date) : ''}</div>
                     <div className="pub-match-body">
                       <div className="pub-match-side">
                         <span className="pub-match-name clickable" onClick={() => m.side_a?.[0] && setSelectedPlayerId(m.side_a[0])}>
@@ -737,9 +765,10 @@ export default function PublicView({ onLogin }) {
             {/* Event selector */}
             <div className="pub-event-tabs">
               {events.map(e => (
-                <button key={e.id} className={`pub-event-tab ${selectedEventId === e.id ? 'active' : ''}`}
+                <button key={e.id} className={'pub-event-tab ' + (selectedEventId === e.id ? 'active' : '')}
                   onClick={() => setSelectedEventId(e.id)}>
                   {e.name}
+                  {e.start_date && <span style={{ display: 'block', fontSize: 10, opacity: 0.7 }}>{formatDate(e.start_date)}{e.end_date && e.end_date !== e.start_date ? ' - ' + formatDate(e.end_date) : ''}</span>}
                 </button>
               ))}
             </div>

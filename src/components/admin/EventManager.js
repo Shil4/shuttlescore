@@ -300,6 +300,7 @@ export default function EventManager() {
   const typeLabel = (t) => ({ singles: 'Singles', doubles: 'Doubles', mixed_doubles: 'Mixed Doubles' }[t] || t);
   const categoryLabel = (c) => ({ u8: 'U-8', u12: 'U-12', u18: 'U-18', adult: 'Adult', senior: 'Senior' }[c] || c);
   const genderLabel = (g) => ({ mens: "Men's", womens: "Women's", mixed: 'Mixed' }[g] || '');
+  const formatDate = (d) => { if (!d) return ''; const p = d.split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : d; };
   const playerName = (id) => poolPlayers.find(p => p.id === id)?.name || '?';
   const playerAge = (id) => { const p = poolPlayers.find(pl => pl.id === id); return p ? getPlayerAge(p) : null; };
   const playerGenderTag = (id) => { const p = poolPlayers.find(pl => pl.id === id); return p?.gender === 'female' ? 'F' : 'M'; };
@@ -411,7 +412,7 @@ export default function EventManager() {
                     <span className="admin-category-badge">{categoryLabel(ev.category)}</span>
                     {ev.gender && <span className="admin-category-badge">{genderLabel(ev.gender)}</span>}
                     <span>{typeLabel(ev.type)}</span>
-                    {ev.start_date && <span>{ev.start_date}{ev.end_date && ev.end_date !== ev.start_date ? ' \u2013 ' + ev.end_date : ''}</span>}
+                    {ev.start_date && <span>{formatDate(ev.start_date)}{ev.end_date && ev.end_date !== ev.start_date ? ' \u2013 ' + formatDate(ev.end_date) : ''}</span>}
                     {eventRegCounts[ev.id] > 0 && (
                       <span className="admin-category-badge" style={{ background: '#152a15', color: '#4ecb71' }}>
                         {eventRegCounts[ev.id]} {isDoubles(ev.type) ? 'pair' : 'player'}{eventRegCounts[ev.id] !== 1 ? 's' : ''}

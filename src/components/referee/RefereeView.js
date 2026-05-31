@@ -132,7 +132,8 @@ export default function RefereeView() {
 
   const playerName = (id) => !id ? 'BYE' : allPlayers.find(p => p.id === id)?.name || '?';
   const sideLabel = (sideArr) => (!sideArr || sideArr.length === 0) ? 'TBD' : sideArr.map(playerName).join(' & ');
-  const stageLabel = (s) => ({ group: 'Group', round_of_32: 'R32', round_of_16: 'R16', quarterfinal: 'QF', semifinal: 'SF', final: 'Final' }[s] || s);
+  const stageLabel = (s) => ({ group: 'Group', round_robin: 'RR', round_of_32: 'R32', round_of_16: 'R16', quarterfinal: 'QF', semifinal: 'SF', third_place: 'Bronze', final: 'Final' }[s] || s);
+  const formatDate = (d) => { if (!d) return ''; const p = d.split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : d; };
 
   const scoreDisplay = (match) => {
     if (!match.score_data?.sets) return null;
@@ -285,7 +286,7 @@ export default function RefereeView() {
                     <h3 className="ref-section-title">🔴 Live</h3>
                     {myLive.map(m => (
                       <div key={m.id} className="ref-match-card live">
-                        <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ` · ${m.court_id}` : ''}</span><span className="ref-match-live">LIVE</span></div>
+                        <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ' · ' + m.court_id : ''}{m.scheduled_date ? ' · ' + formatDate(m.scheduled_date) : ''}</span><span className="ref-match-live">LIVE</span></div>
                         <div className="ref-match-sides">
                           <span>{sideLabel(m.side_a)}</span>
                           <span className="ref-match-score">{scoreDisplay(m) || 'vs'}</span>
@@ -303,7 +304,7 @@ export default function RefereeView() {
                     <h3 className="ref-section-title">📋 Upcoming</h3>
                     {myPending.map(m => (
                       <div key={m.id} className="ref-match-card">
-                        <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ` · ${m.court_id}` : ''}</span></div>
+                        <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ' · ' + m.court_id : ''}{m.scheduled_date ? ' · ' + formatDate(m.scheduled_date) : ''}</span></div>
                         <div className="ref-match-sides">
                           <span>{sideLabel(m.side_a)}</span>
                           <span className="ref-match-vs">vs</span>
@@ -327,7 +328,7 @@ export default function RefereeView() {
                       const won = m.winner;
                       return (
                         <div key={m.id} className="ref-match-card done">
-                          <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ` · ${m.court_id}` : ''}</span><span style={{ fontSize: 10, color: '#4ecb71' }}>✓</span></div>
+                          <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ' · ' + m.court_id : ''}{m.scheduled_date ? ' · ' + formatDate(m.scheduled_date) : ''}</span><span style={{ fontSize: 10, color: '#4ecb71' }}>✓</span></div>
                           <div className="ref-match-sides">
                             <span className={won === 'side_a' ? 'ref-winner' : ''}>{sideLabel(m.side_a)}</span>
                             <span className="ref-match-score">{scoreDisplay(m)}</span>
@@ -353,7 +354,7 @@ export default function RefereeView() {
                     <h3 className="ref-section-title">🔴 Live Matches</h3>
                     {liveMatches.map(m => (
                       <div key={m.id} className="ref-match-card live">
-                        <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ` · ${m.court_id}` : ''}</span><span className="ref-match-live">LIVE</span></div>
+                        <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ' · ' + m.court_id : ''}{m.scheduled_date ? ' · ' + formatDate(m.scheduled_date) : ''}</span><span className="ref-match-live">LIVE</span></div>
                         <div className="ref-match-sides">
                           <span>{sideLabel(m.side_a)}</span>
                           <span className="ref-match-score">{scoreDisplay(m) || 'vs'}</span>
@@ -368,7 +369,7 @@ export default function RefereeView() {
                     <h3 className="ref-section-title">Recent Results</h3>
                     {recentResults.map(m => (
                       <div key={m.id} className="ref-match-card done">
-                        <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ` · ${m.court_id}` : ''}</span></div>
+                        <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ' · ' + m.court_id : ''}{m.scheduled_date ? ' · ' + formatDate(m.scheduled_date) : ''}</span></div>
                         <div className="ref-match-sides">
                           <span className={m.winner === 'side_a' ? 'ref-winner' : ''}>{sideLabel(m.side_a)}</span>
                           <span className="ref-match-score">{scoreDisplay(m)}</span>
@@ -383,7 +384,7 @@ export default function RefereeView() {
                     <h3 className="ref-section-title">Upcoming</h3>
                     {upcomingMatches.map(m => (
                       <div key={m.id} className="ref-match-card">
-                        <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ` · ${m.court_id}` : ''}</span></div>
+                        <div className="ref-match-header"><span>{m._eventName} — {stageLabel(m.stage)}{m.court_id ? ' · ' + m.court_id : ''}{m.scheduled_date ? ' · ' + formatDate(m.scheduled_date) : ''}</span></div>
                         <div className="ref-match-sides">
                           <span>{sideLabel(m.side_a)}</span><span className="ref-match-vs">vs</span><span>{sideLabel(m.side_b)}</span>
                         </div>

@@ -236,7 +236,7 @@ export default function TournamentManager() {
               <div className="admin-list-item">
                 <div className="admin-list-main" style={{ cursor: 'pointer' }} onClick={() => toggleExpand(t.id)}>
                   <div className="admin-list-title">{expandedTournamentId === t.id ? '▾' : '▸'} {t.name}</div>
-                  <div className="admin-list-meta">{t.venue && <span>{t.venue}</span>}{t.start_date && <span>{t.start_date}</span>}</div>
+                  <div className="admin-list-meta">{t.venue && <span>{t.venue}</span>}{t.start_date && <span>{(() => { const p = t.start_date.split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : t.start_date; })()}</span>}</div>
                 </div>
                 <div className="admin-list-right">
                   <span className="admin-status-badge" style={{ color: statusColor(t.status), borderColor: statusColor(t.status) }}>{t.status.replace('_', ' ')}</span>
