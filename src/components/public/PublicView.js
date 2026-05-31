@@ -248,8 +248,8 @@ export default function PublicView({ onLogin }) {
   };
 
   const stageLabel = (s) => ({
-    group: 'Group', round_of_32: 'Round of 32', round_of_16: 'Round of 16',
-    quarterfinal: 'Quarterfinal', semifinal: 'Semifinal', final: 'Final'
+    group: 'Group', round_robin: 'Round Robin', round_of_32: 'Round of 32', round_of_16: 'Round of 16',
+    quarterfinal: 'Quarterfinal', semifinal: 'Semifinal', third_place: 'Bronze', final: 'Final'
   }[s] || s);
 
   const liveMatches = matches.filter(m => m.status === 'in_progress');
@@ -281,51 +281,40 @@ export default function PublicView({ onLogin }) {
   );
 
   const scoreDisplay = (m) => {
+    if (m.default_win) return <span className="pub-set-score" style={{ color: '#d4a843' }}>Walkover</span>;
     if (!m.score_data?.sets) return null;
     return m.score_data.sets.map((set, i) => (
       <span key={i} className="pub-set-score">{set.side_a_points}-{set.side_b_points}</span>
     ));
   };
 
-  // Group standings calculation
+  // Group standings calculation — tracks teams (side arrays) not individual players
   const calcGroupStandings = (groupId) => {
-    const gMatches = eventMatches.filter(m => m.group_id === groupId && (m.status === 'finished' || m.status === 'locked'));
+    const allGroupMatches = eventMatches.filter(m => m.group_id === groupId);
+    const gMatches = allGroupMatches.filter(m => m.status === 'finished' || m.status === 'locked');
     const stats = {};
 
-    // Collect all players in group from all matches (including pending)
-    const allGroupMatches = eventMatches.filter(m => m.group_id === groupId);
-    allGroupMatches.forEach(m => {
-      (m.side_a || []).forEach(id => {
-        if (!stats[id]) stats[id] = { id, played: 0, won: 0, lost: 0, pf: 0, pa: 0 };
-      });
-      (m.side_b || []).forEach(id => {
-        if (!stats[id]) stats[id] = { id, played: 0, won: 0, lost: 0, pf: 0, pa: 0 };
-      });
-    });
+    const sideKey = (arr) => arr ? arr.slice().sort().join(',') : '';
+    const getOrCreate = (arr) => {
+      const key = sideKey(arr);
+      if (!key) return null;
+      if (!stats[key]) stats[key] = { key, playerIds: arr, played: 0, won: 0, lost: 0, pf: 0, pa: 0 };
+      return stats[key];
+    };
+
+    // Register all participants from all matches
+    allGroupMatches.forEach(m => { if (m.side_a) getOrCreate(m.side_a); if (m.side_b) getOrCreate(m.side_b); });
 
     gMatches.forEach(m => {
-      if (!m.score_data?.sets) return;
-      const totalA = m.score_data.sets.reduce((sum, s) => sum + s.side_a_points, 0);
-      const totalB = m.score_data.sets.reduce((sum, s) => sum + s.side_b_points, 0);
-
-      (m.side_a || []).forEach(id => {
-        if (stats[id]) {
-          stats[id].played++;
-          stats[id].pf += totalA;
-          stats[id].pa += totalB;
-          if (m.winner === 'side_a') stats[id].won++;
-          else stats[id].lost++;
-        }
-      });
-      (m.side_b || []).forEach(id => {
-        if (stats[id]) {
-          stats[id].played++;
-          stats[id].pf += totalB;
-          stats[id].pa += totalA;
-          if (m.winner === 'side_b') stats[id].won++;
-          else stats[id].lost++;
-        }
-      });
+      const sA = getOrCreate(m.side_a), sB = getOrCreate(m.side_b);
+      if (!sA || !sB) return;
+      sA.played++; sB.played++;
+      const totalA = (m.score_data?.sets || []).reduce((sum, s) => sum + (s.side_a_points || 0), 0);
+      const totalB = (m.score_data?.sets || []).reduce((sum, s) => sum + (s.side_b_points || 0), 0);
+      sA.pf += totalA; sA.pa += totalB;
+      sB.pf += totalB; sB.pa += totalA;
+      if (m.winner === 'side_a') { sA.won++; sB.lost++; }
+      else if (m.winner === 'side_b') { sB.won++; sA.lost++; }
     });
 
     return Object.values(stats).sort((a, b) => b.won - a.won || (b.pf - b.pa) - (a.pf - a.pa));
@@ -770,15 +759,15 @@ export default function PublicView({ onLogin }) {
                       <table className="pub-standings-table">
                         <thead>
                           <tr>
-                            <th>#</th><th>Player</th><th>P</th><th>W</th><th>L</th><th>PF</th><th>PA</th>
+                            <th>#</th><th>Player/Team</th><th>P</th><th>W</th><th>L</th><th>PD</th>
                           </tr>
                         </thead>
                         <tbody>
                           {standings.map((s, i) => (
-                            <tr key={s.id}>
+                            <tr key={s.key}>
                               <td>{i + 1}</td>
-                              <td className="clickable" onClick={() => setSelectedPlayerId(s.id)}>{playerName(s.id)}</td>
-                              <td>{s.played}</td><td>{s.won}</td><td>{s.lost}</td><td>{s.pf}</td><td>{s.pa}</td>
+                              <td className="clickable" onClick={() => s.playerIds?.[0] && setSelectedPlayerId(s.playerIds[0])}>{sideLabel(s.playerIds)}</td>
+                              <td>{s.played}</td><td>{s.won}</td><td>{s.lost}</td><td>{(s.pf - s.pa) >= 0 ? '+' : ''}{s.pf - s.pa}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -813,9 +802,9 @@ export default function PublicView({ onLogin }) {
 
             {/* Bracket */}
             {(() => {
-              const knockout = eventMatches.filter(m => m.stage !== 'group');
+              const knockout = eventMatches.filter(m => m.stage !== 'group' && m.stage !== 'round_robin');
               if (!knockout.length) return null;
-              const stageOrder = ['round_of_32', 'round_of_16', 'quarterfinal', 'semifinal', 'final'];
+              const stageOrder = ['round_of_32', 'round_of_16', 'quarterfinal', 'semifinal', 'third_place', 'final'];
               const byStage = {};
               knockout.forEach(m => { if (!byStage[m.stage]) byStage[m.stage] = []; byStage[m.stage].push(m); });
 
@@ -830,12 +819,14 @@ export default function PublicView({ onLogin }) {
                             <div className={`pub-bracket-side ${m.winner === 'side_a' ? 'winner' : ''}`}
                               onClick={() => m.side_a?.[0] && setSelectedPlayerId(m.side_a[0])}>
                               {sideLabel(m.side_a)}
-                              {m.score_data?.sets && <span className="pub-bracket-pts">{m.score_data.sets.map(s => s.side_a_points).join(' ')}</span>}
+                              {m.default_win && m.winner === 'side_a' ? <span className="pub-bracket-pts" style={{ color: '#d4a843' }}>W/O</span>
+                                : m.score_data?.sets && <span className="pub-bracket-pts">{m.score_data.sets.map(s => s.side_a_points).join(' ')}</span>}
                             </div>
                             <div className={`pub-bracket-side ${m.winner === 'side_b' ? 'winner' : ''}`}
                               onClick={() => m.side_b?.[0] && setSelectedPlayerId(m.side_b[0])}>
                               {sideLabel(m.side_b)}
-                              {m.score_data?.sets && <span className="pub-bracket-pts">{m.score_data.sets.map(s => s.side_b_points).join(' ')}</span>}
+                              {m.default_win && m.winner === 'side_b' ? <span className="pub-bracket-pts" style={{ color: '#d4a843' }}>W/O</span>
+                                : m.score_data?.sets && <span className="pub-bracket-pts">{m.score_data.sets.map(s => s.side_b_points).join(' ')}</span>}
                             </div>
                             {m.status === 'in_progress' && <div className="pub-bracket-live">LIVE</div>}
                           </div>

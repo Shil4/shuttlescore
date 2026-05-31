@@ -232,6 +232,23 @@ export default function MatchManager() {
     } catch (err) { setError(err.message); }
   };
 
+  // Default win (walkover / injury / no-show)
+  const handleDefaultWin = async (matchId, winningSide) => {
+    const winLabel = winningSide === 'side_a' ? 'Side A' : 'Side B';
+    if (!window.confirm('Award default win (walkover) to ' + winLabel + '?')) return;
+    try {
+      await supabase.from('matches').update({
+        status: 'finished',
+        winner: winningSide,
+        default_win: winningSide,
+        finished_at: new Date().toISOString(),
+      }).eq('id', matchId);
+      setSuccess('Default win awarded.');
+      setTimeout(() => setSuccess(''), 3000);
+      await loadMatches(selectedTournament.id);
+    } catch (err) { setError(err.message); }
+  };
+
   const refName = (refId) => {
     if (!refId) return null;
     const ref = allReferees.find(r => r.id === refId);
@@ -416,7 +433,9 @@ export default function MatchManager() {
                     <span className="match-side-name">{sideLabel(m.side_a)}</span>
                   </div>
                   <div className="match-score-area">
-                    {m.score_data?.sets ? (
+                    {m.default_win ? (
+                      <span style={{ color: '#d4a843', fontSize: 11, fontWeight: 600 }}>W/O</span>
+                    ) : m.score_data?.sets ? (
                       <div className="match-scores">{scoreDisplay(m)}</div>
                     ) : (
                       <span className="match-vs">vs</span>
@@ -493,6 +512,12 @@ export default function MatchManager() {
                       </button>
                       <button className="admin-btn secondary" onClick={() => handleFalseStart(m.id)} style={{ fontSize: 12, padding: '5px 12px' }}>
                         ⚠️ False Start
+                      </button>
+                      <button className="admin-btn secondary" onClick={() => handleDefaultWin(m.id, 'side_a')} style={{ fontSize: 11, padding: '4px 8px', color: '#d4a843' }}>
+                        W/O → {sideLabel(m.side_a)}
+                      </button>
+                      <button className="admin-btn secondary" onClick={() => handleDefaultWin(m.id, 'side_b')} style={{ fontSize: 11, padding: '4px 8px', color: '#d4a843' }}>
+                        W/O → {sideLabel(m.side_b)}
                       </button>
                     </>
                   )}
