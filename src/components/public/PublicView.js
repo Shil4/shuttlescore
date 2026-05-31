@@ -7,6 +7,66 @@ import { supabase } from '../../lib/supabase';
 import { getPlayerAge } from '../admin/PlayerManager';
 import './PublicView.css';
 
+// Score progression line graph (SVG)
+function ScoreGraph({ match }) {
+  if (!match?.score_data?.sets) return null;
+  const allPoints = [];
+  let cumA = 0, cumB = 0;
+  for (const set of match.score_data.sets) {
+    for (const p of (set.point_log || [])) {
+      if (p.scorer === 'side_a') cumA++; else cumB++;
+      allPoints.push({ a: cumA, b: cumB });
+    }
+  }
+  if (allPoints.length < 2) return null;
+  const maxPts = Math.max(cumA, cumB, 1);
+  const w = 280, h = 60, pad = 2;
+  const sx = (i) => pad + (i / (allPoints.length - 1)) * (w - pad * 2);
+  const sy = (v) => h - pad - (v / maxPts) * (h - pad * 2);
+  const lineA = allPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${sx(i).toFixed(1)},${sy(p.a).toFixed(1)}`).join(' ');
+  const lineB = allPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${sx(i).toFixed(1)},${sy(p.b).toFixed(1)}`).join(' ');
+  return (
+    <div className="pub-score-graph">
+      <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: 50 }}>
+        <path d={lineA} fill="none" stroke="#4ecb71" strokeWidth="1.5" opacity="0.8" />
+        <path d={lineB} fill="none" stroke="#5b9bd5" strokeWidth="1.5" opacity="0.8" />
+        <text x={w - 2} y={sy(cumA)} fill="#4ecb71" fontSize="8" textAnchor="end" dominantBaseline="middle">{cumA}</text>
+        <text x={w - 2} y={sy(cumB)} fill="#5b9bd5" fontSize="8" textAnchor="end" dominantBaseline="middle">{cumB}</text>
+      </svg>
+    </div>
+  );
+}
+
+// Calculate medals for a player from matches
+function calcMedals(playerId, matches, events) {
+  const medals = [];
+  const eventMap = new Map((events || []).map(e => [e.id, e]));
+  for (const m of matches) {
+    if (m.status !== 'finished' && m.status !== 'locked') continue;
+    if (!m.winner) continue;
+    const isA = (m.side_a || []).includes(playerId);
+    const isB = (m.side_b || []).includes(playerId);
+    if (!isA && !isB) continue;
+    const won = (isA && m.winner === 'side_a') || (isB && m.winner === 'side_b');
+    const ev = eventMap.get(m.event_id);
+    const evType = ev?.type === 'doubles' ? 'Doubles' : 'Singles';
+    const evCat = ev?.category || '';
+    const evGender = ev?.gender ? ({ mens: "Men's", womens: "Women's", mixed: 'Mixed' }[ev.gender] || '') : '';
+    const label = [evGender, evCat === 'adult' ? '' : evCat.toUpperCase(), evType].filter(Boolean).join(' ');
+
+    if (m.stage === 'final') medals.push({ type: won ? 'gold' : 'silver', label, eventId: m.event_id });
+    else if (m.stage === 'third_place' && won) medals.push({ type: 'bronze', label, eventId: m.event_id });
+  }
+  // Group by type+label and count
+  const grouped = {};
+  for (const md of medals) {
+    const key = md.type + '|' + md.label;
+    if (!grouped[key]) grouped[key] = { ...md, count: 0 };
+    grouped[key].count++;
+  }
+  return Object.values(grouped);
+}
+
 export default function PublicView({ onLogin }) {
   const [tournaments, setTournaments] = useState([]);
   const [selectedTournament, setSelectedTournament] = useState(null);
@@ -525,6 +585,23 @@ export default function PublicView({ onLogin }) {
               </div>
             </div>
 
+            {/* Medals */}
+            {(() => {
+              const medals = calcMedals(selectedPlayerId, matches, events);
+              if (medals.length === 0) return null;
+              return (
+                <div className="pub-medals">
+                  {medals.map((md, i) => (
+                    <span key={i} className={'pub-medal ' + md.type} title={md.label}>
+                      {md.type === 'gold' ? '\uD83E\uDD47' : md.type === 'silver' ? '\uD83E\uDD48' : '\uD83E\uDD49'}
+                      {md.count > 1 && <span className="pub-medal-count">{'\u00D7'}{md.count}</span>}
+                      <span style={{ fontSize: 10, opacity: 0.7 }}>{md.label}</span>
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
+
             <div className="pub-profile-matches-title">Matches in {selectedTournament.name}</div>
             {playerMatches.length === 0 ? (
               <p style={{ color: '#555', fontSize: 13 }}>No matches yet.</p>
@@ -534,23 +611,26 @@ export default function PublicView({ onLogin }) {
                   const isA = (m.side_a || []).includes(selectedPlayerId);
                   const won = (isA && m.winner === 'side_a') || (!isA && m.winner === 'side_b');
                   return (
-                    <div key={m.id} className={`pub-match-mini ${m.status === 'in_progress' ? 'live' : ''}`}>
-                      <div className="pub-match-mini-header">
-                        <span className="pub-match-mini-event">{m._eventName}</span>
-                        <span className="pub-match-mini-stage">{stageLabel(m.stage)}</span>
+                    <div key={m.id} className={'pub-match-mini ' + (m.status === 'in_progress' ? 'live' : '')}>
+                      <div style={{ width: '100%' }}>
+                        <div className="pub-match-mini-header">
+                          <span className="pub-match-mini-event">{m._eventName}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span className="pub-match-mini-stage">{stageLabel(m.stage)}</span>
+                            {m.status === 'in_progress' && <span style={{ fontSize: 9, color: '#4ecb71', fontWeight: 700 }}>LIVE</span>}
+                            {(m.status === 'finished' || m.status === 'locked') && (
+                              <span className={'pub-result-badge ' + (won ? 'win' : 'loss')}>{won ? 'W' : 'L'}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="pub-match-mini-sides">
+                          <span className={isA && won ? 'won' : ''}>{sideLabel(m.side_a)}</span>
+                          <span className="pub-match-mini-score">
+                            {m.score_data?.sets ? scoreDisplay(m) : 'vs'}
+                          </span>
+                          <span className={!isA && won ? 'won' : ''}>{sideLabel(m.side_b)}</span>
+                        </div>
                       </div>
-                      <div className="pub-match-mini-sides">
-                        <span className={isA && won ? 'won' : ''}>{sideLabel(m.side_a)}</span>
-                        <span className="pub-match-mini-score">
-                          {m.score_data?.sets ? scoreDisplay(m) : 'vs'}
-                        </span>
-                        <span className={!isA && won ? 'won' : ''}>{sideLabel(m.side_b)}</span>
-                      </div>
-                      {m.status === 'in_progress' && <span className="pub-live-badge">LIVE</span>}
-                      {(m.status === 'finished' || m.status === 'locked') && (
-                        <span className={`pub-result-badge ${won ? 'win' : 'loss'}`}>{won ? 'W' : 'L'}</span>
-                      )}
-                      {refereeName(m.referee_id) && <div className="pub-match-mini-ref" onClick={(e) => { e.stopPropagation(); setSelectedRefId(m.referee_id); }} style={{ cursor: "pointer" }}>🏅 <span className="pub-ref-clickable">{refereeName(m.referee_id)}</span></div>}
                     </div>
                   );
                 })}
@@ -695,7 +775,8 @@ export default function PublicView({ onLogin }) {
                       </div>
                     </div>
                     {refereeName(m.referee_id) && <div className="pub-match-referee" onClick={() => setSelectedRefId(m.referee_id)} style={{ cursor: "pointer" }}>Referee: <span className="pub-ref-clickable">{refereeName(m.referee_id)}</span></div>}
-                    {m.court_id && <div style={{ fontSize: 11, color: '#888', textAlign: 'center', marginTop: 2 }}>🏟️ {m.court_id}</div>}
+                    {m.court_id && <div style={{ fontSize: 11, color: '#888', textAlign: 'center', marginTop: 2 }}>{'\uD83C\uDFDF\uFE0F'} {m.court_id}</div>}
+                    <ScoreGraph match={m} />
                   </div>
                 ))}
               </div>
