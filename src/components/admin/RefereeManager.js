@@ -44,8 +44,9 @@ export default function RefereeManager() {
 
       // Load admin profile
       if (user?.profile?.id) {
-        const { data: profile } = await supabase.from('profiles').select('display_name').eq('id', user.profile.id).single();
+        const { data: profile } = await supabase.from('profiles').select('display_name, player_id').eq('id', user.profile.id).single();
         if (profile?.display_name) { setAdminName(profile.display_name); setAdminNameSaved(true); }
+        if (profile?.player_id) setAdminPlayerId(profile.player_id);
       }
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
@@ -54,14 +55,14 @@ export default function RefereeManager() {
   const handleSaveAdminName = async () => {
     if (!adminName.trim() || !user?.profile?.id) return;
     try {
-      await supabase.from('profiles').update({ display_name: adminName.trim() }).eq('id', user.profile.id);
+      await supabase.from('profiles').update({ display_name: adminName.trim(), player_id: adminPlayerId || null }).eq('id', user.profile.id);
       setAdminNameSaved(true); setSuccess('Admin name saved.');
       setTimeout(() => setSuccess(''), 2000);
     } catch (err) { setError(err.message); }
   };
 
-  // When admin links to a player, offer to use player name
-  const handleAdminPlayerLink = (playerId) => {
+  // When admin links to a player, offer to use player name, then persist immediately
+  const handleAdminPlayerLink = async (playerId) => {
     setAdminPlayerId(playerId);
     if (playerId) {
       const player = allPlayers.find(p => p.id === playerId);
@@ -69,6 +70,9 @@ export default function RefereeManager() {
         setAdminName(player.name);
         setAdminNameSaved(false);
       }
+    }
+    if (user?.profile?.id) {
+      await supabase.from('profiles').update({ player_id: playerId || null }).eq('id', user.profile.id);
     }
   };
 

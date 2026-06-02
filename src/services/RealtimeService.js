@@ -42,4 +42,21 @@ export const RealtimeService = {
 
     return () => { supabase.removeChannel(channel); };
   },
+
+  // Subscribe to app_config changes (for live announcements)
+  subscribeToConfig(callback) {
+    const channel = supabase
+      .channel('config-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'app_config' },
+        (payload) => {
+          // On DELETE, payload.new is empty — pass old row so key is still available
+          callback(payload.new?.key ? payload.new : { ...payload.old, value: '' });
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  },
 };

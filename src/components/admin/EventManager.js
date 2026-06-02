@@ -1,65 +1,13 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { TournamentService } from '../../services/TournamentService';
 import { supabase } from '../../lib/supabase';
-import { getPlayerAge } from './PlayerManager';
 import { useShiftSelect } from '../../hooks/useShiftSelect';
+import {
+  isDoubles, isGenderApplicable, getGenderOptions, categoryLabel,
+  getBucket, bucketLabel, sortByAgeRelevance, sortByGenderAndAge,
+} from './eventCategoryHelpers';
+import { getPlayerAge } from './PlayerManager';
 import './AdminComponents.css';
-
-// Sort players by age relevance to event category
-function sortByAgeRelevance(players, category) {
-  const bucket = (p) => getBucket(p, category);
-  return [...players].sort((a, b) => {
-    const ba = bucket(a), bb = bucket(b);
-    if (ba !== bb) return ba - bb;
-    return a.name.localeCompare(b.name);
-  });
-}
-
-function bucketLabel(category, bucketIdx) {
-  const labels = {
-    u8: ['Under 8 (eligible)', 'U-12', 'U-18', 'Adults', 'Seniors'],
-    u12: ['Ages 8-12 (eligible)', 'Under 8', 'U-18', 'Adults', 'Seniors'],
-    u18: ['Ages 12-18 (eligible)', 'U-12', 'Under 8', 'Adults', 'Seniors'],
-    adult: ['Adults 18-44 (eligible)', 'Seniors 45+', 'U-18', 'U-12', 'Under 8'],
-    senior: ['Seniors 45+ (eligible)', 'Adults 18-44', 'U-18', 'U-12', 'Under 8'],
-  };
-  return (labels[category] || [])[bucketIdx] || 'Other';
-}
-
-function getBucket(player, category) {
-  const age = getPlayerAge(player);
-  if (age === null) return 99;
-  switch (category) {
-    case 'u8': return age < 8 ? 0 : age < 12 ? 1 : age < 18 ? 2 : age < 45 ? 3 : 4;
-    case 'u12': return (age >= 8 && age < 12) ? 0 : age < 8 ? 1 : age < 18 ? 2 : age < 45 ? 3 : 4;
-    case 'u18': return (age >= 12 && age < 18) ? 0 : (age >= 8 && age < 12) ? 1 : age < 8 ? 2 : age < 45 ? 3 : 4;
-    case 'adult': return (age >= 18 && age < 45) ? 0 : age >= 45 ? 1 : (age >= 12 && age < 18) ? 2 : (age >= 8 && age < 12) ? 3 : 4;
-    case 'senior': return age >= 45 ? 0 : (age >= 18 && age < 45) ? 1 : (age >= 12 && age < 18) ? 2 : (age >= 8 && age < 12) ? 3 : 4;
-    default: return 0;
-  }
-}
-
-function sortByGenderAndAge(players, category, targetGender) {
-  return [...players].sort((a, b) => {
-    const gA = (targetGender && a.gender === targetGender) ? 0 : 1;
-    const gB = (targetGender && b.gender === targetGender) ? 0 : 1;
-    if (gA !== gB) return gA - gB;
-    const bucketA = getBucket(a, category);
-    const bucketB = getBucket(b, category);
-    if (bucketA !== bucketB) return bucketA - bucketB;
-    return a.name.localeCompare(b.name);
-  });
-}
-
-function isGenderApplicable(category) { return category === 'adult'; }
-
-function getGenderOptions(type) {
-  if (type === 'singles') return [{ value: 'mens', label: "Men's" }, { value: 'womens', label: "Women's" }];
-  if (type === 'doubles') return [{ value: 'mens', label: "Men's" }, { value: 'womens', label: "Women's" }, { value: 'mixed', label: 'Mixed' }];
-  return [];
-}
-
-function isDoubles(type) { return type === 'doubles'; }
 
 export default function EventManager() {
   const [tournaments, setTournaments] = useState([]);
@@ -298,7 +246,6 @@ export default function EventManager() {
 
   // Label helpers
   const typeLabel = (t) => ({ singles: 'Singles', doubles: 'Doubles', mixed_doubles: 'Mixed Doubles' }[t] || t);
-  const categoryLabel = (c) => ({ u8: 'U-8', u12: 'U-12', u18: 'U-18', adult: 'Adult', senior: 'Senior' }[c] || c);
   const genderLabel = (g) => ({ mens: "Men's", womens: "Women's", mixed: 'Mixed' }[g] || '');
   const formatDate = (d) => { if (!d) return ''; const p = d.split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : d; };
   const playerName = (id) => poolPlayers.find(p => p.id === id)?.name || '?';
@@ -359,7 +306,7 @@ export default function EventManager() {
             <div className="admin-form-row">
               <div className="admin-field"><label>Category</label>
                 <select value={eventForm.category} onChange={e => handleCategoryChange(e.target.value)}>
-                  <option value="u8">U-8</option><option value="u12">U-12</option><option value="u18">U-18</option>
+                  <option value="u8">U-8</option><option value="u12">U-13</option><option value="u18">U-18</option>
                   <option value="adult">Adult</option><option value="senior">Senior (45+)</option>
                 </select>
               </div>

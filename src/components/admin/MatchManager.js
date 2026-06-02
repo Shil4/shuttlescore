@@ -18,6 +18,7 @@ export default function MatchManager() {
   const [allPlayers, setAllPlayers] = useState([]);
   const [allGroups, setAllGroups] = useState([]); // eslint-disable-line no-unused-vars
   const [allReferees, setAllReferees] = useState([]);
+  const [adminProfiles, setAdminProfiles] = useState([]);
   const [allCourts, setAllCourts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -55,6 +56,8 @@ export default function MatchManager() {
       }
       const { data: refs } = await supabase.from('referees').select('*').order('username');
       setAllReferees(refs || []);
+      const { data: admins } = await supabase.from('profiles').select('id, display_name, name').eq('role', 'admin');
+      setAdminProfiles(admins || []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -150,12 +153,15 @@ export default function MatchManager() {
       if (isAdmin) {
         update.referee_id = null;
         update.referee_confirmed = true;
+        update.referee_admin_id = user?.profile?.id || null;
       } else if (refereeId) {
         update.referee_id = refereeId;
+        update.referee_admin_id = null;
       } else {
         // Unassigning
         update.referee_id = null;
         update.referee_is_admin = false;
+        update.referee_admin_id = null;
       }
       const { error: updateErr } = await supabase.from('matches').update(update).eq('id', matchId);
       if (updateErr) { setError('Failed to assign referee: ' + updateErr.message); return; }
@@ -477,7 +483,7 @@ export default function MatchManager() {
                   ) : (
                     <>
                       {m.referee_id && <span className="match-referee-name">🏅 {refName(m.referee_id)}</span>}
-                      {m.referee_is_admin && <span className="match-referee-name">🛡️ Admin{user?.profile?.display_name ? ` (${user.profile.display_name})` : ''}</span>}
+                      {m.referee_is_admin && <span className="match-referee-name">🛡️ {(() => { const a = adminProfiles.find(p => p.id === m.referee_admin_id); return a ? (a.display_name || a.name) : 'Admin'; })()}</span>}
                     </>
                   )}
                 </div>

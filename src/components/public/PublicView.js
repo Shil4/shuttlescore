@@ -5,6 +5,8 @@ import { getPlayerAge } from '../admin/PlayerManager';
 import MatchCard from './MatchCard';
 import PlayerProfile from './PlayerProfile';
 import FullHistory from './FullHistory';
+import BracketView from './BracketView';
+import QRModal from './QRModal';
 import ScoreGraph from './ScoreGraph';
 import { MedalIcon } from './MedalBadges';
 import { stageLabel, formatDate, pName, sideLabel, scoreDisplay, calcMedals, getPlayerEventMedal } from './helpers';
@@ -18,6 +20,7 @@ export default function PublicView({ onLogin }) {
   const [allPlayers, setAllPlayers] = useState([]);
   const [groups, setGroups] = useState([]);
   const [referees, setReferees] = useState([]);
+  const [adminProfiles, setAdminProfiles] = useState([]); // all admin profiles: { id, display_name, name, player_id }
   const [selectedPlayerId, setSelectedPlayerId] = useState(null);
   const [selectedRefId, setSelectedRefId] = useState(null);
   const [refProfileData, setRefProfileData] = useState(null);
@@ -26,19 +29,21 @@ export default function PublicView({ onLogin }) {
   const [loading, setLoading] = useState(true);
   const [playerSearch, setPlayerSearch] = useState('');
   const [fullHistoryPlayerId, setFullHistoryPlayerId] = useState(null);
+  const [fullHistoryInitialTab, setFullHistoryInitialTab] = useState('player');
   const [overviewEventFilter, setOverviewEventFilter] = useState('all');
   const [overviewStatusFilter, setOverviewStatusFilter] = useState('all');
-  const [adminName, setAdminName] = useState('Admin');
+  const [announcement, setAnnouncement] = useState('');
+  const [announcementDismissed, setAnnouncementDismissed] = useState(false);
+  const [showQR, setShowQR] = useState(false);
 
-  // Load tournaments
+  // Load tournaments + all admin profiles
   useEffect(() => {
     (async () => {
       const { data: allTourns } = await supabase.from('tournaments').select('*').order('start_date', { ascending: false });
       setTournaments(allTourns || []);
       if (allTourns?.length > 0) { const active = allTourns.find(t => t.status === 'in_progress') || allTourns[0]; setSelectedTournament(active); }
-      // Load admin display name
-      const { data: adminProfiles } = await supabase.from('profiles').select('display_name').eq('role', 'admin').limit(1);
-      if (adminProfiles?.[0]?.display_name) setAdminName(adminProfiles[0].display_name);
+      const { data: admins } = await supabase.from('profiles').select('id, display_name, name, player_id').eq('role', 'admin');
+      setAdminProfiles(admins || []);
       setLoading(false);
     })();
   }, []);
@@ -47,10 +52,23 @@ export default function PublicView({ onLogin }) {
   useEffect(() => {
     if (!selectedTournament) return;
     loadTournamentData(selectedTournament.id);
+    loadAnnouncement(selectedTournament.id);
+    setAnnouncementDismissed(false);
     const unsub = RealtimeService.subscribeToMatches(() => loadTournamentData(selectedTournament.id));
-    return () => unsub();
+    const unsubConfig = RealtimeService.subscribeToConfig((row) => {
+      if (row?.key === `announcement_${selectedTournament.id}`) {
+        setAnnouncement(row.value || '');
+        setAnnouncementDismissed(false);
+      }
+    });
+    return () => { unsub(); unsubConfig(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTournament?.id]);
+
+  const loadAnnouncement = async (tid) => {
+    const { data } = await supabase.from('app_config').select('value').eq('key', `announcement_${tid}`).maybeSingle();
+    setAnnouncement(data?.value || '');
+  };
 
   const loadTournamentData = async (tid) => {
     const [evRes, mRes, pRes, gRes, rRes] = await Promise.all([
@@ -80,8 +98,12 @@ export default function PublicView({ onLogin }) {
   }, [selectedRefId, referees, matches]);
 
   const refereeName = (rid) => { const r = referees.find(x => x.id === rid); return r?.display_name || r?.username || ''; };
+  const adminDisplayName = (m) => {
+    const a = adminProfiles.find(p => p.id === m.referee_admin_id);
+    return a ? (a.display_name || a.name || 'Admin') : 'Admin';
+  };
   const getRefDisplay = (m) => {
-    if (m.referee_is_admin) return adminName;
+    if (m.referee_is_admin) return adminDisplayName(m);
     if (m.referee_id) return refereeName(m.referee_id);
     return '';
   };
@@ -141,15 +163,34 @@ export default function PublicView({ onLogin }) {
     .filter(p => !playerSearch || p.name.toLowerCase().includes(playerSearch.toLowerCase()))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  // ── Loading ──
-  if (loading) return <div className="pub-loading"><div className="pub-loading-icon">{'\uD83C\uDFF8'}</div><p>Loading ShuttleScore...</p></div>;
+  // ── Loading skeleton ──
+  if (loading) return (
+    <div className="pub">
+      <header className="pub-header">
+        <div className="pub-header-left"><span className="pub-logo">{'\uD83C\uDFF8'} ShuttleScore</span></div>
+      </header>
+      <div className="pub-skeleton-page">
+        <div className="pub-skeleton pub-skeleton-header" />
+        <div className="pub-skeleton-tabs">
+          <div className="pub-skeleton pub-skeleton-tab" />
+          <div className="pub-skeleton pub-skeleton-tab" />
+          <div className="pub-skeleton pub-skeleton-tab" />
+        </div>
+        <div className="pub-skeleton pub-skeleton-card" />
+        <div className="pub-skeleton pub-skeleton-card" />
+        <div className="pub-skeleton pub-skeleton-card-sm" />
+        <div className="pub-skeleton pub-skeleton-card-sm" />
+      </div>
+    </div>
+  );
 
   // ── Full History Page ──
   if (fullHistoryPlayerId) return (
     <div className="pub"><div className="pub-content">
       <FullHistory playerId={fullHistoryPlayerId} allPlayers={allPlayers}
-        onClose={() => setFullHistoryPlayerId(null)}
-        onPlayerClick={(id) => { setFullHistoryPlayerId(null); setSelectedPlayerId(id); }}
+        initialTab={fullHistoryInitialTab}
+        onClose={() => { setFullHistoryPlayerId(null); setFullHistoryInitialTab('player'); }}
+        onPlayerClick={(id) => { setFullHistoryPlayerId(null); setFullHistoryInitialTab('player'); setSelectedPlayerId(id); }}
         onRefClick={(rid) => setSelectedRefId(rid)} />
     </div></div>
   );
@@ -167,9 +208,12 @@ export default function PublicView({ onLogin }) {
               {tournaments.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           )}
-          {onLogin && <button className="pub-login-btn" onClick={onLogin}>Admin</button>}
+          <button className="pub-qr-btn" onClick={() => setShowQR(true)} title="Show QR code">{'\uD83D\uDCF1'}</button>
+          {onLogin && <button className="pub-login-btn" onClick={onLogin}>Login</button>}
         </div>
       </header>
+
+      {showQR && <QRModal onClose={() => setShowQR(false)} />}
 
       {/* Player Profile Popup */}
       {selectedPlayer && (
@@ -177,40 +221,82 @@ export default function PublicView({ onLogin }) {
           events={events} allPlayers={allPlayers} tournamentName={selectedTournament?.name || ''}
           onClose={() => setSelectedPlayerId(null)}
           onPlayerClick={(id) => setSelectedPlayerId(id)}
-          onViewHistory={() => { setFullHistoryPlayerId(selectedPlayerId); setSelectedPlayerId(null); }}
+          onViewHistory={() => { setFullHistoryPlayerId(selectedPlayerId); setFullHistoryInitialTab('player'); setSelectedPlayerId(null); }}
           onRefClick={(rid) => setSelectedRefId(rid)}
-          refereeNameFn={refereeName} />
+          getMatchRefDisplay={getRefDisplay} />
       )}
 
       {/* Referee profile overlay */}
-      {selectedRefId && refProfileData && (
+      {selectedRefId && selectedRefId !== '__admin__' && refProfileData && (
         <div className="pub-overlay" onClick={() => setSelectedRefId(null)}>
           <div className="pub-profile-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 500 }}>
             <button className="pub-profile-close" onClick={() => setSelectedRefId(null)}>{'\u2715'}</button>
-            <h3 className="pub-profile-name">{'\uD83C\uDFC5'} {refProfileData.referee?.display_name || refProfileData.referee?.username || adminName}</h3>
+            <h3 className="pub-profile-name">{'\uD83C\uDFC5'} {refProfileData.referee?.display_name || refProfileData.referee?.username}</h3>
             <div className="pub-profile-stats">
               <div className="pub-profile-stat">
                 <span className="pub-profile-stat-num">{refProfileData.matches.length}</span>
                 <span className="pub-profile-stat-label">Matches Refereed</span>
               </div>
             </div>
+            {refProfileData.referee?.player_id && (
+              <button className="pub-full-history-btn" onClick={() => {
+                const pid = refProfileData.referee.player_id;
+                setSelectedRefId(null);
+                setFullHistoryPlayerId(pid);
+                setFullHistoryInitialTab('referee');
+              }}>
+                {'\uD83D\uDCCA'} View Full Profile
+              </button>
+            )}
           </div>
         </div>
       )}
-      {/* Admin referee overlay (no ref ID) */}
+      {/* Admin referee overlay */}
+      {selectedRefId && adminProfiles.some(p => p.id === selectedRefId) && (() => {
+        const adminP = adminProfiles.find(p => p.id === selectedRefId);
+        const adminMatchCount = matches.filter(m => m.referee_is_admin && m.referee_admin_id === selectedRefId && (m.status === 'finished' || m.status === 'locked')).length;
+        return (
+          <div className="pub-overlay" onClick={() => setSelectedRefId(null)}>
+            <div className="pub-profile-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 500 }}>
+              <button className="pub-profile-close" onClick={() => setSelectedRefId(null)}>{'\u2715'}</button>
+              <h3 className="pub-profile-name">{'\uD83C\uDFC5'} {adminP.display_name || adminP.name || 'Admin'}</h3>
+              <div className="pub-profile-meta"><span className="pub-profile-badge">Admin Referee</span></div>
+              <div className="pub-profile-stats">
+                <div className="pub-profile-stat">
+                  <span className="pub-profile-stat-num">{adminMatchCount}</span>
+                  <span className="pub-profile-stat-label">Matches Refereed</span>
+                </div>
+              </div>
+              {adminP.player_id && (
+                <button className="pub-full-history-btn" onClick={() => {
+                  setSelectedRefId(null);
+                  setFullHistoryPlayerId(adminP.player_id);
+                  setFullHistoryInitialTab('referee');
+                }}>
+                  {'\uD83D\uDCCA'} View Full Profile
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+      {/* Fallback admin overlay when referee_admin_id not set (old matches) */}
       {selectedRefId === '__admin__' && (
         <div className="pub-overlay" onClick={() => setSelectedRefId(null)}>
           <div className="pub-profile-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 500 }}>
             <button className="pub-profile-close" onClick={() => setSelectedRefId(null)}>{'\u2715'}</button>
-            <h3 className="pub-profile-name">{'\uD83C\uDFC5'} {adminName}</h3>
+            <h3 className="pub-profile-name">{'\uD83C\uDFC5'} Admin</h3>
             <div className="pub-profile-meta"><span className="pub-profile-badge">Admin Referee</span></div>
-            <div className="pub-profile-stats">
-              <div className="pub-profile-stat">
-                <span className="pub-profile-stat-num">{matches.filter(m => m.referee_is_admin && (m.status === 'finished' || m.status === 'locked')).length}</span>
-                <span className="pub-profile-stat-label">Matches Refereed</span>
-              </div>
-            </div>
           </div>
+        </div>
+      )}
+
+      {/* Announcement bar */}
+      {announcement && !announcementDismissed && (
+        <div className="pub-announcement">
+          <span className="pub-announcement-icon">{'\uD83D\uDCE3'}</span>
+          <span className="pub-announcement-text">{announcement}</span>
+          <button className="pub-announcement-dismiss" onClick={() => setAnnouncementDismissed(true)}>{'\u2715'}</button>
         </div>
       )}
 
@@ -226,7 +312,7 @@ export default function PublicView({ onLogin }) {
 
         {/* ── OVERVIEW TAB ── */}
         {activeTab === 'overview' && (
-          <div>
+          <div className="pub-tab-content">
             {/* Tournament card */}
             {selectedTournament && (
               <div className="pub-tournament-card">
@@ -265,7 +351,7 @@ export default function PublicView({ onLogin }) {
                 <h3 className="pub-section-title"><span className="pub-live-dot" /> Live Now</h3>
                 {liveMatches.map(m => <MatchCard key={m.id} match={m} allPlayers={allPlayers} allMatches={matches}
                   onPlayerClick={setSelectedPlayerId} onRefClick={setSelectedRefId}
-                  refereeName={getRefDisplay(m)} refId={m.referee_is_admin ? "__admin__" : m.referee_id} />)}
+                  refereeName={getRefDisplay(m)} refId={m.referee_is_admin ? (m.referee_admin_id || "__admin__") : m.referee_id} />)}
               </div>
             )}
 
@@ -275,7 +361,7 @@ export default function PublicView({ onLogin }) {
                 <h3 className="pub-section-title">Results</h3>
                 {recentResults.map(m => <MatchCard key={m.id} match={m} allPlayers={allPlayers} allMatches={matches}
                   onPlayerClick={setSelectedPlayerId} onRefClick={setSelectedRefId}
-                  refereeName={getRefDisplay(m)} refId={m.referee_is_admin ? "__admin__" : m.referee_id} />)}
+                  refereeName={getRefDisplay(m)} refId={m.referee_is_admin ? (m.referee_admin_id || "__admin__") : m.referee_id} />)}
               </div>
             )}
 
@@ -285,7 +371,7 @@ export default function PublicView({ onLogin }) {
                 <h3 className="pub-section-title">Upcoming</h3>
                 {upcomingMatches.map(m => <MatchCard key={m.id} match={m} allPlayers={allPlayers} allMatches={matches}
                   onPlayerClick={setSelectedPlayerId} onRefClick={setSelectedRefId}
-                  refereeName={getRefDisplay(m)} refId={m.referee_is_admin ? "__admin__" : m.referee_id} />)}
+                  refereeName={getRefDisplay(m)} refId={m.referee_is_admin ? (m.referee_admin_id || "__admin__") : m.referee_id} />)}
               </div>
             )}
 
@@ -297,7 +383,7 @@ export default function PublicView({ onLogin }) {
 
         {/* ── BRACKETS TAB ── */}
         {activeTab === 'brackets' && (
-          <div>
+          <div className="pub-tab-content">
             <div className="pub-event-tabs">
               {events.map(e => (
                 <button key={e.id} className={'pub-event-tab ' + (selectedEventId === e.id ? 'active' : '')} onClick={() => setSelectedEventId(e.id)}>
@@ -354,56 +440,20 @@ export default function PublicView({ onLogin }) {
             {(() => {
               const knockout = eventMatches.filter(m => m.stage !== 'group' && m.stage !== 'round_robin');
               if (!knockout.length) return null;
-              const stageOrder = ['round_of_32', 'round_of_16', 'quarterfinal', 'semifinal', 'third_place', 'final'];
-              const byStage = {};
-              knockout.forEach(m => { if (!byStage[m.stage]) byStage[m.stage] = []; byStage[m.stage].push(m); });
               return (
-                <div className="pub-bracket"><div className="pub-bracket-rounds">
-                  {stageOrder.filter(s => byStage[s]).map(stage => (
-                    <div key={stage} className="pub-bracket-round">
-                      <div className="pub-bracket-round-title">{stageLabel(stage)}</div>
-                      {byStage[stage].sort((a, b) => (a.bracket_position || 0) - (b.bracket_position || 0)).map(m => (
-                        <div key={m.id} className={'pub-bracket-match ' + (m.status === 'in_progress' ? 'live' : '')}>
-                          <div className={'pub-bracket-side ' + (m.winner === 'side_a' ? 'winner' : '')}
-                            onClick={() => m.side_a?.[0] && setSelectedPlayerId(m.side_a[0])}>
-                            {sideLbl(m.side_a)}
-                            {(m.status === 'finished' || m.status === 'locked') && m.winner && m.stage === 'final' && (
-                              <MedalIcon type={m.winner === 'side_a' ? 'gold' : 'silver'} />
-                            )}
-                            {(m.status === 'finished' || m.status === 'locked') && m.winner === 'side_a' && m.stage === 'third_place' && (
-                              <MedalIcon type="bronze" />
-                            )}
-                            {m.default_win && m.winner === 'side_a' ? <span className="pub-bracket-pts" style={{ color: '#d4a843' }}>W/O</span>
-                              : m.score_data?.sets && <span className="pub-bracket-pts">{m.score_data.sets.map(s => s.side_a_points).join(' ')}</span>}
-                          </div>
-                          <div className={'pub-bracket-side ' + (m.winner === 'side_b' ? 'winner' : '')}
-                            onClick={() => m.side_b?.[0] && setSelectedPlayerId(m.side_b[0])}>
-                            {sideLbl(m.side_b)}
-                            {(m.status === 'finished' || m.status === 'locked') && m.winner && m.stage === 'final' && (
-                              <MedalIcon type={m.winner === 'side_b' ? 'gold' : 'silver'} />
-                            )}
-                            {(m.status === 'finished' || m.status === 'locked') && m.winner === 'side_b' && m.stage === 'third_place' && (
-                              <MedalIcon type="bronze" />
-                            )}
-                            {m.default_win && m.winner === 'side_b' ? <span className="pub-bracket-pts" style={{ color: '#d4a843' }}>W/O</span>
-                              : m.score_data?.sets && <span className="pub-bracket-pts">{m.score_data.sets.map(s => s.side_b_points).join(' ')}</span>}
-                          </div>
-                          {m.status === 'in_progress' && <div className="pub-bracket-live">LIVE</div>}
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div></div>
+                <div className="pub-bracket">
+                  <BracketView matches={knockout} allPlayers={allPlayers} onPlayerClick={setSelectedPlayerId} />
+                </div>
               );
             })()}
 
-            {eventMatches.length === 0 && <div className="pub-empty">No draws yet for this event.</div>}
+                        {eventMatches.length === 0 && <div className="pub-empty">No draws yet for this event.</div>}
           </div>
         )}
 
         {/* ── PLAYERS TAB ── */}
         {activeTab === 'players' && (
-          <div>
+          <div className="pub-tab-content">
             <div className="pub-player-search">
               <input type="text" placeholder="Search players..." value={playerSearch} onChange={e => setPlayerSearch(e.target.value)} />
               <span className="pub-player-count">{filteredPlayers.length}</span>

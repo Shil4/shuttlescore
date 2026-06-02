@@ -28,6 +28,8 @@ export default function TournamentManager() {
   const [poolSearch, setPoolSearch] = useState('');
   const [courts, setCourts] = useState([]);
   const [newCourtName, setNewCourtName] = useState('');
+  const [announcement, setAnnouncement] = useState('');
+  const [announcementSaved, setAnnouncementSaved] = useState(false);
 
   useEffect(() => { loadTournaments(); }, []);
 
@@ -74,6 +76,11 @@ export default function TournamentManager() {
       setTournamentPlayerIds(new Set((tp || []).map(r => r.player_id)));
       setCourts(c || []);
 
+      // Load announcement for this tournament
+      const { data: ann } = await supabase.from('app_config').select('value').eq('key', `announcement_${tid}`).maybeSingle();
+      setAnnouncement(ann?.value || '');
+      setAnnouncementSaved(true);
+
       const events = await TournamentService.getEvents(tid);
       const inEvents = new Set();
       for (const evt of events) {
@@ -83,6 +90,18 @@ export default function TournamentManager() {
       setEventPlayerIds(inEvents);
     } catch (err) { setError(err.message); }
     finally { setPoolLoading(false); }
+  };
+
+  const handleSaveAnnouncement = async () => {
+    if (!expandedTournamentId) return;
+    const key = `announcement_${expandedTournamentId}`;
+    const trimmed = announcement.trim();
+    if (trimmed) {
+      await supabase.from('app_config').upsert({ key, value: trimmed, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    } else {
+      await supabase.from('app_config').delete().eq('key', key);
+    }
+    setAnnouncementSaved(true);
   };
 
   const handleAddPlayersToPool = async () => {
@@ -275,6 +294,25 @@ export default function TournamentManager() {
                             style={{ flex: 1, padding: '5px 10px', background: '#0d0d14', border: '1px solid #2a2a3e', borderRadius: 6, color: '#ddd', fontSize: 12 }} />
                           <button className="admin-btn primary" onClick={handleAddCourt} disabled={!newCourtName.trim()} style={{ fontSize: 11, padding: '5px 10px' }}>+ Add</button>
                         </div>
+                      </div>
+
+                      {/* Announcement */}
+                      <div style={{ marginBottom: 16, padding: '12px 14px', background: '#14141f', borderRadius: 8, border: '1px solid #1e1e2e' }}>
+                        <div style={{ marginBottom: 8 }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: '#ccc' }}>📣 Announcement</span>
+                          <span style={{ fontSize: 11, color: '#555', marginLeft: 8 }}>Shown to all spectators. Leave empty to hide.</span>
+                        </div>
+                        <textarea
+                          value={announcement}
+                          onChange={e => { setAnnouncement(e.target.value); setAnnouncementSaved(false); }}
+                          placeholder="e.g. Lunch break — play resumes at 2pm"
+                          rows={2}
+                          style={{ width: '100%', padding: '7px 10px', background: '#0d0d14', border: '1px solid #2a2a3e', borderRadius: 6, color: '#ddd', fontSize: 12, resize: 'vertical', boxSizing: 'border-box' }}
+                        />
+                        <button className="admin-btn primary" onClick={handleSaveAnnouncement} disabled={announcementSaved}
+                          style={{ fontSize: 11, padding: '5px 12px', marginTop: 6 }}>
+                          {announcementSaved ? '✓ Saved' : 'Save'}
+                        </button>
                       </div>
 
                       <div className="pool-header">

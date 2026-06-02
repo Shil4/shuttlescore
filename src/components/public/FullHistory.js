@@ -4,10 +4,10 @@ import { getPlayerAge } from '../admin/PlayerManager';
 import MedalBadges from './MedalBadges';
 import { sideLabel, stageLabel, formatDate, scoreDisplay, calcMedals } from './helpers';
 
-export default function FullHistory({ playerId, allPlayers, onClose, onPlayerClick, onRefClick }) {
+export default function FullHistory({ playerId, allPlayers, initialTab = 'player', onClose, onPlayerClick, onRefClick }) {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
-  const [activeTab, setActiveTab] = useState('player'); // 'player' | 'referee'
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [activeTournamentId, setActiveTournamentId] = useState(null);
 
   useEffect(() => {
@@ -38,13 +38,21 @@ export default function FullHistory({ playerId, allPlayers, onClose, onPlayerCli
         ? await supabase.from('events').select('id, name, type, gender, category').in('id', eventIds)
         : { data: [] };
 
-      // Check if player has refereed
+      // Check if player has refereed — via referees table (regular referees)
       const { data: referee } = await supabase.from('referees').select('*').eq('player_id', playerId).maybeSingle();
       let refMatches = [];
       if (referee) {
         const { data: rm } = await supabase.from('matches').select('*, event:events!inner(name, tournament_id)')
           .eq('referee_id', referee.id).order('created_at', { ascending: false });
         refMatches = rm || [];
+      }
+
+      // Also check if player is linked to an admin profile (admin referees)
+      const { data: adminProfile } = await supabase.from('profiles').select('id').eq('player_id', playerId).eq('role', 'admin').maybeSingle();
+      if (adminProfile) {
+        const { data: adminRefMatches } = await supabase.from('matches').select('*, event:events!inner(name, tournament_id)')
+          .eq('referee_admin_id', adminProfile.id).eq('referee_is_admin', true).order('created_at', { ascending: false });
+        refMatches = [...refMatches, ...(adminRefMatches || [])];
       }
 
       // Build name map for display
@@ -68,19 +76,20 @@ export default function FullHistory({ playerId, allPlayers, onClose, onPlayerCli
       setData({
         player, tournaments: tournaments || [], events: events || [],
         matches: enriched, refMatches: enrichedRef,
-        referee, allPlayers: players || [],
+        referee, isAdminReferee: !!adminProfile, allPlayers: players || [],
         hasPlayerHistory: enriched.length > 0,
         hasRefHistory: enrichedRef.length > 0,
       });
 
-      // Set default tab
-      if (enriched.length > 0) {
+      // Set default tab — respect initialTab prop, fall back gracefully
+      if (initialTab === 'referee' && enrichedRef.length > 0) {
+        setActiveTab('referee');
+      } else if (enriched.length > 0) {
         setActiveTab('player');
-        setActiveTournamentId(tournaments?.[0]?.id || null);
       } else if (enrichedRef.length > 0) {
         setActiveTab('referee');
-        setActiveTournamentId(tournaments?.[0]?.id || null);
       }
+      setActiveTournamentId(tournaments?.[0]?.id || null);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };
@@ -88,7 +97,7 @@ export default function FullHistory({ playerId, allPlayers, onClose, onPlayerCli
   if (loading) return <div className="pub-loading"><div className="pub-loading-icon">{'\uD83C\uDFF8'}</div><p>Loading history...</p></div>;
   if (!data) return null;
 
-  const { player, tournaments, events, matches, refMatches, referee, hasPlayerHistory, hasRefHistory } = data;
+  const { player, tournaments, events, matches, refMatches, referee, isAdminReferee, hasPlayerHistory, hasRefHistory } = data;
   const ap = data.allPlayers;
   const age = getPlayerAge(player);
   const medals = calcMedals(playerId, matches, events);
@@ -154,7 +163,7 @@ export default function FullHistory({ playerId, allPlayers, onClose, onPlayerCli
         <div className="pub-profile-meta">
           <span className="pub-profile-badge">{player.gender === 'female' ? 'F' : 'M'}</span>
           {age != null && <span className="pub-profile-badge">{age} years</span>}
-          {referee && <span className="pub-profile-badge" style={{ background: '#1a2a1a', color: '#4ecb71' }}>Referee</span>}
+          {(referee || isAdminReferee) && <span className="pub-profile-badge" style={{ background: '#1a2a1a', color: '#4ecb71' }}>Referee</span>}
         </div>
       </div>
 

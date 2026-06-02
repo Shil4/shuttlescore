@@ -1,9 +1,56 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { RealtimeService } from '../../services/RealtimeService';
 import './MatchScorer.css';
 
 const AUTO_LOCK_MINUTES = 5;
+
+// ── Confetti ──────────────────────────────────────────────────
+function launchConfetti() {
+  const canvas = document.createElement('canvas');
+  canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999';
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  const COLOURS = ['#4ecb71','#d4a843','#5588ff','#ff6655','#ffffff','#cc88ff'];
+  const pieces = Array.from({ length: 120 }, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * -canvas.height,
+    w: 8 + Math.random() * 8,
+    h: 4 + Math.random() * 4,
+    colour: COLOURS[Math.floor(Math.random() * COLOURS.length)],
+    rot: Math.random() * Math.PI * 2,
+    vx: (Math.random() - 0.5) * 3,
+    vy: 2 + Math.random() * 4,
+    vr: (Math.random() - 0.5) * 0.15,
+  }));
+
+  let frame;
+  const draw = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    let alive = false;
+    pieces.forEach(p => {
+      p.x += p.vx; p.y += p.vy; p.rot += p.vr; p.vy += 0.05;
+      if (p.y < canvas.height + 20) alive = true;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.colour;
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.restore();
+    });
+    if (alive) { frame = requestAnimationFrame(draw); }
+    else { cancelAnimationFrame(frame); document.body.removeChild(canvas); }
+  };
+  frame = requestAnimationFrame(draw);
+  // Auto-remove after 4s regardless
+  setTimeout(() => {
+    cancelAnimationFrame(frame);
+    if (canvas.parentNode) document.body.removeChild(canvas);
+  }, 4000);
+}
 
 export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = true }) {
   const [match, setMatch] = useState(null);
@@ -289,6 +336,7 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
         .single();
       if (err) throw err;
       setMatch(data);
+      if (data.stage === 'final' || data.stage === 'third_place') launchConfetti();
     } catch (err) {
       setError(err.message);
     } finally {

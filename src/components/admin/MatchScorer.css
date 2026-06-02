@@ -270,18 +270,53 @@
 /* Mobile */
 @media (max-width: 768px) {
   .scorer-side-points {
-    font-size: 44px;
+    font-size: 72px;
   }
 
   .scorer-side {
-    padding: 20px 12px;
+    padding: 32px 10px;
+    min-height: 160px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    border-radius: 20px;
+  }
+
+  .scorer-side-name {
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+
+  .scorer-tap-hint {
+    font-size: 12px;
+    margin-top: 14px;
   }
 
   .scorer-main {
-    gap: 8px;
+    gap: 6px;
   }
 
   .scorer-middle {
-    min-width: 50px;
+    min-width: 44px;
+  }
+
+  .scorer-btn {
+    padding: 14px 20px;
+    font-size: 15px;
+    min-height: 60px;
+    border-radius: 12px;
+  }
+
+  .scorer-actions {
+    gap: 10px;
+  }
+
+  .scorer-set-pill {
+    padding: 8px 8px;
+  }
+
+  .scorer-set-score {
+    font-size: 13px;
   }
 }

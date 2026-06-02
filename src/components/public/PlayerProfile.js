@@ -9,7 +9,7 @@ import { sideLabel, stageLabel, scoreDisplay, calcMedals } from './helpers';
  */
 export default function PlayerProfile({
   player, matches, allMatches, events, allPlayers,
-  tournamentName, onClose, onPlayerClick, onViewHistory, onRefClick, refereeNameFn,
+  tournamentName, onClose, onPlayerClick, onViewHistory, onRefClick, refereeNameFn, getMatchRefDisplay,
 }) {
   if (!player) return null;
 
@@ -83,11 +83,16 @@ export default function PlayerProfile({
                       </span>
                       <span className={!isA && isWon ? 'won' : ''} onClick={() => m.side_b?.[0] && onPlayerClick(m.side_b[0])}>{sideLabel(m.side_b, allPlayers)}</span>
                     </div>
-                    {refereeNameFn && refereeNameFn(m.referee_id) && (
-                      <div className="pub-match-mini-ref" onClick={() => onRefClick && onRefClick(m.referee_id)} style={{ cursor: 'pointer' }}>
-                        {'\uD83C\uDFC5'} <span className="pub-ref-clickable">{refereeNameFn(m.referee_id)}</span>
-                      </div>
-                    )}
+                    {(() => {
+                      const refDisplay = getMatchRefDisplay ? getMatchRefDisplay(m) : (refereeNameFn ? refereeNameFn(m.referee_id) : '');
+                      const refId = m.referee_is_admin ? (m.referee_admin_id || '__admin__') : m.referee_id;
+                      if (!refDisplay) return null;
+                      return (
+                        <div className="pub-match-mini-ref" onClick={() => onRefClick && onRefClick(refId)} style={{ cursor: 'pointer' }}>
+                          {'\uD83C\uDFC5'} <span className="pub-ref-clickable">{refDisplay}</span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               );

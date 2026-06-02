@@ -42,7 +42,8 @@ export function calcMedals(playerId, matches, events) {
     const won = (isA && m.winner === 'side_a') || (isB && m.winner === 'side_b');
     const ev = eventMap.get(m.event_id);
     const evType = ev?.type === 'doubles' ? 'Doubles' : 'Singles';
-    const catLabel = ev?.category && ev.category !== 'adult' ? ev.category.toUpperCase() + ' ' : '';
+    const CAT_LABELS = { u8: 'U-8', u12: 'U-13', u18: 'U-18', senior: 'Senior' };
+    const catLabel = ev?.category && ev.category !== 'adult' ? (CAT_LABELS[ev.category] || ev.category.toUpperCase()) + ' ' : '';
     const gLabel = ev?.gender ? ({ mens: "Men's ", womens: "Women's ", mixed: 'Mixed ' }[ev.gender] || '') : '';
     const label = gLabel + catLabel + evType;
 
