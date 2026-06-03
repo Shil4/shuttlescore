@@ -284,7 +284,7 @@ export default function PublicView({ onLogin }) {
         <div className="pub-overlay" onClick={() => setSelectedRefId(null)}>
           <div className="pub-profile-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 500 }}>
             <button className="pub-profile-close" onClick={() => setSelectedRefId(null)}>{'\u2715'}</button>
-            <h3 className="pub-profile-name">{'\uD83C\uDFC5'} {refProfileData.referee?.display_name || refProfileData.referee?.username}</h3>
+            <h3 className="pub-profile-name">{<span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#c0392b', color: '#fff', fontWeight: 700, fontSize: 10, padding: '1px 5px', borderRadius: 3, marginRight: 6 }}>R</span>} {refProfileData.referee?.display_name || refProfileData.referee?.username}</h3>
             <div className="pub-profile-stats">
               <div className="pub-profile-stat">
                 <span className="pub-profile-stat-num">{refProfileData.matches.length}</span>
@@ -312,7 +312,7 @@ export default function PublicView({ onLogin }) {
           <div className="pub-overlay" onClick={() => setSelectedRefId(null)}>
             <div className="pub-profile-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 500 }}>
               <button className="pub-profile-close" onClick={() => setSelectedRefId(null)}>{'\u2715'}</button>
-              <h3 className="pub-profile-name">{'\uD83C\uDFC5'} {adminP.display_name || adminP.name || 'Admin'}</h3>
+              <h3 className="pub-profile-name">{<span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#c0392b', color: '#fff', fontWeight: 700, fontSize: 10, padding: '1px 5px', borderRadius: 3, marginRight: 6 }}>R</span>} {adminP.display_name || adminP.name || 'Admin'}</h3>
               <div className="pub-profile-meta"><span className="pub-profile-badge">Admin Referee</span></div>
               <div className="pub-profile-stats">
                 <div className="pub-profile-stat">
@@ -338,7 +338,7 @@ export default function PublicView({ onLogin }) {
         <div className="pub-overlay" onClick={() => setSelectedRefId(null)}>
           <div className="pub-profile-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 500 }}>
             <button className="pub-profile-close" onClick={() => setSelectedRefId(null)}>{'\u2715'}</button>
-            <h3 className="pub-profile-name">{'\uD83C\uDFC5'} Admin</h3>
+            <h3 className="pub-profile-name">{<span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#c0392b', color: '#fff', fontWeight: 700, fontSize: 10, padding: '1px 5px', borderRadius: 3, marginRight: 6 }}>R</span>} Admin</h3>
             <div className="pub-profile-meta"><span className="pub-profile-badge">Admin Referee</span></div>
           </div>
         </div>

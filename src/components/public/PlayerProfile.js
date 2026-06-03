@@ -89,7 +89,8 @@ export default function PlayerProfile({
                       if (!refDisplay) return null;
                       return (
                         <div className="pub-match-mini-ref" onClick={() => onRefClick && onRefClick(refId)} style={{ cursor: 'pointer' }}>
-                          {'\uD83C\uDFC5'} <span className="pub-ref-clickable">{refDisplay}</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#c0392b', color: '#fff', fontWeight: 700, fontSize: 9, padding: '1px 4px', borderRadius: 3, marginRight: 4 }}>R</span>
+                          <span className="pub-ref-clickable">{refDisplay}</span>
                         </div>
                       );
                     })()}

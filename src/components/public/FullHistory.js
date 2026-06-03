@@ -202,7 +202,7 @@ export default function FullHistory({ playerId, allPlayers, initialTab = 'player
           <button className={'pub-tab ' + (activeTab === 'referee' ? 'active' : '')}
             onClick={() => { setActiveTab('referee'); setActiveTournamentId(tabTournaments[0]?.id || null); }}
             style={{ flex: 'none', padding: '8px 16px' }}>
-            {'\uD83C\uDFC5'} Referee
+            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#c0392b', color: '#fff', fontWeight: 700, fontSize: 9, padding: '1px 4px', borderRadius: 3, marginRight: 4 }}>R</span> Referee
           </button>
         </div>
       )}
