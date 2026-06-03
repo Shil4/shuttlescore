@@ -123,6 +123,13 @@ export default function EventManager() {
     } catch (err) { setError(err.message); }
   };
 
+  const handleToggleHidden = async (ev) => {
+    try {
+      await supabase.from('events').update({ hidden: !ev.hidden }).eq('id', ev.id);
+      await loadEvents(selectedTournament.id);
+    } catch (err) { setError(err.message); }
+  };
+
   const handleDeleteEvent = async (id) => {
     if (!window.confirm('Delete this event and all its registrations?')) return;
     try { await TournamentService.deleteEvent(id); await loadEvents(selectedTournament.id); }
@@ -354,7 +361,10 @@ export default function EventManager() {
             <div key={ev.id}>
               <div className="admin-list-item">
                 <div className="admin-list-main" style={{ cursor: 'pointer' }} onClick={() => toggleEventExpand(ev.id)}>
-                  <div className="admin-list-title">{expandedEventId === ev.id ? '\u25BE' : '\u25B8'} {ev.name}</div>
+                  <div className="admin-list-title">
+                    {expandedEventId === ev.id ? '\u25BE' : '\u25B8'} {ev.name}
+                    {ev.hidden && <span style={{ fontSize: 10, color: '#555', marginLeft: 8, fontWeight: 400 }}>● Hidden</span>}
+                  </div>
                   <div className="admin-list-meta">
                     <span className="admin-category-badge">{categoryLabel(ev.category)}</span>
                     {ev.gender && <span className="admin-category-badge">{genderLabel(ev.gender)}</span>}
@@ -368,6 +378,11 @@ export default function EventManager() {
                   </div>
                 </div>
                 <div className="admin-list-right">
+                  <button className="admin-btn small" onClick={() => handleToggleHidden(ev)}
+                    title={ev.hidden ? 'Show in public view' : 'Hide from public view'}
+                    style={{ color: ev.hidden ? '#888' : '#4ecb71', borderColor: ev.hidden ? '#888' : '#4ecb71' }}>
+                    {ev.hidden ? '👁 Show' : '👁 Hide'}
+                  </button>
                   <button className="admin-btn small" onClick={() => handleEditEvent(ev)}>Edit</button>
                   <button className="admin-btn small danger" onClick={() => handleDeleteEvent(ev.id)}>Delete</button>
                 </div>

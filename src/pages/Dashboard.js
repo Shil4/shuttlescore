@@ -6,6 +6,7 @@ import EventManager from '../components/admin/EventManager';
 import DrawManager from '../components/admin/DrawManager';
 import MatchManager from '../components/admin/MatchManager';
 import RefereeManager from '../components/admin/RefereeManager';
+import ActionLog from '../components/admin/ActionLog';
 import './Dashboard.css';
 
 const NAV_ITEMS = [
@@ -15,6 +16,7 @@ const NAV_ITEMS = [
   { key: 'draws', label: 'Draws', icon: '🎲' },
   { key: 'matches', label: 'Matches', icon: '🏸' },
   { key: 'referees', label: 'Referees', icon: '🏅' },
+  { key: 'log', label: 'Action Log', icon: '📜' },
 ];
 
 export default function Dashboard() {
@@ -30,6 +32,7 @@ export default function Dashboard() {
       case 'draws': return <DrawManager />;
       case 'matches': return <MatchManager />;
       case 'referees': return <RefereeManager />;
+      case 'log': return <ActionLog />;
       default: return <div className="dash-placeholder"><p>Select a section.</p></div>;
     }
   };

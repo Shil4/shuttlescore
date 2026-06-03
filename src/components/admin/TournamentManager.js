@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { TournamentService } from '../../services/TournamentService';
+import { exportTournamentPDF } from './exportTournamentPDF';
 import { supabase } from '../../lib/supabase';
 import { getPlayerAge } from './PlayerManager';
 import { useShiftSelect } from '../../hooks/useShiftSelect';
@@ -266,6 +267,7 @@ export default function TournamentManager() {
                     <button className="admin-btn small" style={{ color: '#d4a843', borderColor: '#d4a843' }} onClick={() => handleStatusTransition(t.id, 'completed')}>✓ Complete</button>
                   )}
                   <button className="admin-btn small" onClick={() => handleEdit(t)}>Edit</button>
+                  <button className="admin-btn small" onClick={() => exportTournamentPDF(t)} title="Export results as PDF">📄 Export</button>
                   <button className="admin-btn small danger" onClick={() => handleDelete(t.id)}>Delete</button>
                 </div>
               </div>

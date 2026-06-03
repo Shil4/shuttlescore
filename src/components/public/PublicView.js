@@ -7,6 +7,7 @@ import PlayerProfile from './PlayerProfile';
 import FullHistory from './FullHistory';
 import BracketView from './BracketView';
 import QRModal from './QRModal';
+import TournamentSummary from './TournamentSummary';
 import ScoreGraph from './ScoreGraph';
 import { MedalIcon } from './MedalBadges';
 import { stageLabel, formatDate, pName, sideLabel, scoreDisplay, calcMedals, getPlayerEventMedal } from './helpers';
@@ -78,12 +79,22 @@ export default function PublicView({ onLogin }) {
       supabase.from('groups').select('*, events!inner(tournament_id)').eq('events.tournament_id', tid).order('name'),
       supabase.from('referees').select('*'),
     ]);
-    setEvents(evRes.data || []);
-    setMatches((mRes.data || []).map(m => ({ ...m, _eventName: m.event?.name || '?', _eventOrder: m.event?.display_order || 0 })));
+    const visibleEvents = (evRes.data || []).filter(e => !e.hidden);
+    const visibleEventIds = new Set(visibleEvents.map(e => e.id));
+    const visibleGroups = (gRes.data || []).filter(g => visibleEventIds.has(g.event_id));
+    const groupMap = {};
+    visibleGroups.forEach(g => { groupMap[g.id] = g.name; });
+    setEvents(visibleEvents);
+    setMatches((mRes.data || []).filter(m => visibleEventIds.has(m.event_id)).map(m => ({
+      ...m,
+      _eventName: m.event?.name || '?',
+      _eventOrder: m.event?.display_order || 0,
+      _groupName: m.group_id ? (groupMap[m.group_id] || '') : '',
+    })));
     setAllPlayers(pRes.data || []);
-    setGroups((gRes.data || []).map(g => ({ ...g, _eventId: g.event_id })));
+    setGroups(visibleGroups.map(g => ({ ...g, _eventId: g.event_id })));
     setReferees(rRes.data || []);
-    if (!selectedEventId && evRes.data?.length > 0) setSelectedEventId(evRes.data[0].id);
+    if (!selectedEventId && visibleEvents.length > 0) setSelectedEventId(visibleEvents[0].id);
   };
 
   // Ref profile loader
@@ -329,6 +340,12 @@ export default function PublicView({ onLogin }) {
               </div>
             )}
 
+            {/* Tournament summary — cross-event progress */}
+            {events.length > 0 && (
+              <TournamentSummary events={events} matches={matches} allPlayers={allPlayers}
+                onEventClick={(evtId) => { setSelectedEventId(evtId); setActiveTab('brackets'); }} />
+            )}
+
             {/* Filters */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
               <select value={overviewEventFilter} onChange={e => setOverviewEventFilter(e.target.value)}
@@ -355,21 +372,21 @@ export default function PublicView({ onLogin }) {
               </div>
             )}
 
-            {/* Results */}
-            {recentResults.length > 0 && (
-              <div className="pub-section">
-                <h3 className="pub-section-title">Results</h3>
-                {recentResults.map(m => <MatchCard key={m.id} match={m} allPlayers={allPlayers} allMatches={matches}
-                  onPlayerClick={setSelectedPlayerId} onRefClick={setSelectedRefId}
-                  refereeName={getRefDisplay(m)} refId={m.referee_is_admin ? (m.referee_admin_id || "__admin__") : m.referee_id} />)}
-              </div>
-            )}
-
             {/* Upcoming */}
             {upcomingMatches.length > 0 && (
               <div className="pub-section">
                 <h3 className="pub-section-title">Upcoming</h3>
                 {upcomingMatches.map(m => <MatchCard key={m.id} match={m} allPlayers={allPlayers} allMatches={matches}
+                  onPlayerClick={setSelectedPlayerId} onRefClick={setSelectedRefId}
+                  refereeName={getRefDisplay(m)} refId={m.referee_is_admin ? (m.referee_admin_id || "__admin__") : m.referee_id} />)}
+              </div>
+            )}
+
+            {/* Results */}
+            {recentResults.length > 0 && (
+              <div className="pub-section">
+                <h3 className="pub-section-title">Results</h3>
+                {recentResults.map(m => <MatchCard key={m.id} match={m} allPlayers={allPlayers} allMatches={matches}
                   onPlayerClick={setSelectedPlayerId} onRefClick={setSelectedRefId}
                   refereeName={getRefDisplay(m)} refId={m.referee_is_admin ? (m.referee_admin_id || "__admin__") : m.referee_id} />)}
               </div>

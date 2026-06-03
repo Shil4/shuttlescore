@@ -1,0 +1,212 @@
+/* ── Match Scheduler ─────────────────────────────────────────── */
+
+.scheduler {
+  margin-bottom: 24px;
+}
+
+.scheduler-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.scheduler-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ddd;
+}
+
+.scheduler-hint {
+  font-size: 11px;
+  color: #555;
+  margin-bottom: 14px;
+}
+
+.scheduler-empty {
+  font-size: 13px;
+  color: #555;
+  padding: 20px 0;
+  text-align: center;
+}
+
+.scheduler-courts {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  align-items: flex-start;
+}
+
+.scheduler-court {
+  background: #0d0d14;
+  border: 1px solid #1e1e2e;
+  border-radius: 10px;
+  min-width: 220px;
+  max-width: 260px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.15s;
+}
+
+.scheduler-court.unassigned {
+  border-style: dashed;
+  border-color: #2a2a3a;
+  background: #0a0a10;
+}
+
+.scheduler-court-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid #1a1a2a;
+  gap: 8px;
+}
+
+.scheduler-court-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ccc;
+  white-space: nowrap;
+}
+
+.scheduler-bulk-date {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.scheduler-date-native {
+  background: #14141f;
+  border: 1px solid #2a2a3e;
+  border-radius: 5px;
+  color: #aaa;
+  font-size: 11px;
+  padding: 3px 6px;
+  cursor: pointer;
+  width: 130px;
+}
+
+.scheduler-date-native:focus {
+  outline: none;
+  border-color: #4ecb71;
+}
+
+.scheduler-match-date-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.scheduler-match-date-display {
+  font-size: 11px;
+  color: #4ecb71;
+  font-weight: 600;
+}
+
+.scheduler-date-clear {
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  line-height: 1;
+}
+.scheduler-date-clear:hover { color: #e85454; }
+
+.scheduler-court-date-label {
+  font-size: 10px;
+  color: #4ecb71;
+  padding: 4px 12px 0;
+  font-weight: 600;
+}
+
+.scheduler-match-list {
+  padding: 8px;
+  flex: 1;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scheduler-drop-hint {
+  font-size: 11px;
+  color: #333;
+  text-align: center;
+  padding: 16px 8px;
+  border: 1px dashed #1e1e2e;
+  border-radius: 6px;
+}
+
+.scheduler-match {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: #14141f;
+  border: 1px solid #1e1e2e;
+  border-radius: 7px;
+  padding: 8px 10px;
+  cursor: grab;
+  user-select: none;
+  transition: border-color 0.1s, box-shadow 0.1s;
+}
+
+.scheduler-match:hover {
+  border-color: #3a3a5a;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.scheduler-match:active { cursor: grabbing; }
+
+.scheduler-match-grip {
+  font-size: 14px;
+  color: #333;
+  flex-shrink: 0;
+  margin-top: 2px;
+  letter-spacing: -1px;
+}
+
+.scheduler-match-body { flex: 1; min-width: 0; }
+
+.scheduler-match-event {
+  font-size: 10px;
+  color: #666;
+  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scheduler-match-sides {
+  font-size: 12px;
+  color: #ccc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scheduler-court-footer {
+  font-size: 10px;
+  color: #444;
+  padding: 6px 12px 8px;
+  text-align: right;
+  border-top: 1px solid #1a1a2a;
+}
+
+@media (max-width: 768px) {
+  .scheduler-courts {
+    flex-direction: column;
+    overflow-x: visible;
+  }
+  .scheduler-court {
+    min-width: unset;
+    max-width: unset;
+    width: 100%;
+  }
+}

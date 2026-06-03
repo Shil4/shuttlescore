@@ -189,3 +189,61 @@
     display: none;
   }
 }
+
+/* ── Action Log ──────────────────────────────────────────────── */
+.action-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: #1a1a2a;
+  border: 1px solid #1e1e2e;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.action-log-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 11px 14px;
+  background: #0d0d14;
+  transition: background 0.1s;
+}
+
+.action-log-entry:hover { background: #12121e; }
+
+.action-log-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  width: 22px;
+  text-align: center;
+  margin-top: 1px;
+}
+
+.action-log-body { flex: 1; min-width: 0; }
+
+.action-log-title {
+  font-size: 13px;
+  color: #ddd;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.action-log-detail {
+  font-size: 11px;
+  color: #666;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.action-log-time {
+  font-size: 11px;
+  color: #444;
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding-top: 2px;
+}

@@ -30,7 +30,7 @@ export default function MatchCard({ match: m, allPlayers, onPlayerClick, onRefCl
   return (
     <div className={'pub-match-card ' + (isLive ? 'live' : isUpcoming ? 'upcoming' : '')}>
       <div className="pub-match-event">
-        {m._eventName} {'\u2014'} {stageLabel(m.stage)}
+        {m._eventName} {'\u2014'} {m.stage === 'group' && m._groupName ? m._groupName : stageLabel(m.stage)}
         {m.court_id ? ' \u00B7 ' + m.court_id : ''}
         {m.scheduled_date ? ' \u00B7 ' + formatDate(m.scheduled_date) : ''}
       </div>
