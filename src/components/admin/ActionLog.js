@@ -86,7 +86,7 @@ function buildEntries(matches, players, events, referees, adminProfiles) {
       entries.push({
         ts: m.updated_at,
         type: 'referee',
-        icon: '🏅',
+        icon: 'R',
         colour: '#888',
         title: `Referee assigned — ${matchLabel}`,
         detail: `${refName} · ${matchDesc}`,
@@ -157,7 +157,7 @@ export default function ActionLog() {
     { key: 'result', label: '✅ Results' },
     { key: 'override', label: '🔓 Overrides' },
     { key: 'started', label: '▶ Started' },
-    { key: 'referee', label: '🏅 Referees' },
+    { key: 'referee', label: 'R Referees' },
   ];
 
   return (

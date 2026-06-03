@@ -187,13 +187,13 @@
   color: #f0f0f0;
 }
 
-.scorer-btn.new-set {
+.scorer-btn.new-game {
   background: #1e1e30;
   color: #aaa;
   border: 1px solid #333;
 }
 
-.scorer-btn.new-set:hover:not(:disabled) {
+.scorer-btn.new-game:hover:not(:disabled) {
   border-color: #555;
   color: #f0f0f0;
 }
@@ -319,4 +319,20 @@
   .scorer-set-score {
     font-size: 13px;
   }
+}
+
+/* Game pill selected state */
+.scorer-set-pill.selected {
+  border-color: #d4a843;
+  background: #2a2215;
+}
+
+/* Game action panel */
+.scorer-game-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
 }

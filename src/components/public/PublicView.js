@@ -13,6 +13,41 @@ import { MedalIcon } from './MedalBadges';
 import { stageLabel, formatDate, pName, sideLabel, scoreDisplay, calcMedals, getPlayerEventMedal } from './helpers';
 import './PublicView.css';
 
+
+// ── Confetti ──────────────────────────────────────────────────
+function launchConfetti() {
+  const canvas = document.createElement('canvas');
+  canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999';
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const COLOURS = ['#4ecb71','#d4a843','#5588ff','#ff6655','#ffffff','#cc88ff'];
+  const pieces = Array.from({ length: 150 }, () => ({
+    x: Math.random() * canvas.width, y: Math.random() * -canvas.height,
+    w: 8 + Math.random() * 8, h: 4 + Math.random() * 4,
+    colour: COLOURS[Math.floor(Math.random() * COLOURS.length)],
+    rot: Math.random() * Math.PI * 2, vx: (Math.random() - 0.5) * 3,
+    vy: 2 + Math.random() * 4, vr: (Math.random() - 0.5) * 0.15,
+  }));
+  let frame;
+  const draw = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    let alive = false;
+    pieces.forEach(p => {
+      p.x += p.vx; p.y += p.vy; p.rot += p.vr; p.vy += 0.05;
+      if (p.y < canvas.height + 20) alive = true;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.fillStyle = p.colour; ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+      ctx.restore();
+    });
+    if (alive) { frame = requestAnimationFrame(draw); }
+    else { cancelAnimationFrame(frame); if (canvas.parentNode) document.body.removeChild(canvas); }
+  };
+  frame = requestAnimationFrame(draw);
+  setTimeout(() => { cancelAnimationFrame(frame); if (canvas.parentNode) document.body.removeChild(canvas); }, 5000);
+}
+
 export default function PublicView({ onLogin }) {
   const [tournaments, setTournaments] = useState([]);
   const [selectedTournament, setSelectedTournament] = useState(null);
@@ -55,7 +90,14 @@ export default function PublicView({ onLogin }) {
     loadTournamentData(selectedTournament.id);
     loadAnnouncement(selectedTournament.id);
     setAnnouncementDismissed(false);
-    const unsub = RealtimeService.subscribeToMatches(() => loadTournamentData(selectedTournament.id));
+    const unsub = RealtimeService.subscribeToMatches((eventType, newRow, oldRow) => {
+      // Confetti when final or bronze match finishes
+      if (eventType === 'UPDATE' && newRow?.status === 'finished' && oldRow?.status === 'in_progress') {
+        const stage = newRow.stage;
+        if (stage === 'final' || stage === 'third_place') launchConfetti();
+      }
+      loadTournamentData(selectedTournament.id);
+    });
     const unsubConfig = RealtimeService.subscribeToConfig((row) => {
       if (row?.key === `announcement_${selectedTournament.id}`) {
         setAnnouncement(row.value || '');

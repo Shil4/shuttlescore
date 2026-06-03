@@ -15,7 +15,7 @@ const NAV_ITEMS = [
   { key: 'events', label: 'Events', icon: '📋' },
   { key: 'draws', label: 'Draws', icon: '🎲' },
   { key: 'matches', label: 'Matches', icon: '🏸' },
-  { key: 'referees', label: 'Referees', icon: '🏅' },
+  { key: 'referees', label: 'Referees', icon: 'R' },
   { key: 'log', label: 'Action Log', icon: '📜' },
 ];
 

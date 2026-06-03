@@ -246,7 +246,7 @@ export default function RefereeView() {
       <header className="ref-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span className="ref-logo">🏸 ShuttleScore</span>
-          <span className="ref-name">🏅 {referee.display_name}</span>
+          <span className="ref-name">[R] {referee.display_name}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {tournaments.length > 1 && (
@@ -264,7 +264,7 @@ export default function RefereeView() {
       {/* Tabs */}
       <div className="ref-tabs">
         <button className={`ref-tab ${activeTab === 'my_matches' ? 'active' : ''}`} onClick={() => setActiveTab('my_matches')}>
-          🏅 My Matches {myLive.length > 0 && <span className="ref-tab-badge">{myLive.length}</span>}
+          My Matches {myLive.length > 0 && <span className="ref-tab-badge">{myLive.length}</span>}
         </button>
         <button className={`ref-tab ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>
           📊 Overview

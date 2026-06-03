@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { RealtimeService } from '../../services/RealtimeService';
+import ScoreGraph from '../public/ScoreGraph';
 import './MatchScorer.css';
 
 const AUTO_LOCK_MINUTES = 5;
@@ -148,6 +149,7 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
 
   // Track if score has been edited after finish (needs re-save)
   const [editedAfterFinish, setEditedAfterFinish] = useState(false);
+  const [selectedGameIndex, setSelectedGameIndex] = useState(null); // for game-level undo/delete
 
   // Add point
   const addPoint = async (side) => {
@@ -231,6 +233,62 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
         .single();
       if (err) throw err;
       setMatch(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Delete a game
+  const deleteGame = async (idx) => {
+    if (!match || saving) return;
+    const gameToDelete = sets[idx];
+    const isEmpty = gameToDelete.side_a_points === 0 && gameToDelete.side_b_points === 0;
+    if (!isEmpty && !window.confirm(`Delete Game ${idx + 1} (${gameToDelete.side_a_points}-${gameToDelete.side_b_points})? This cannot be undone.`)) return;
+
+    setSaving(true);
+    setError('');
+    try {
+      const newScoreData = JSON.parse(JSON.stringify(match.score_data));
+      newScoreData.sets.splice(idx, 1);
+      // Adjust current_set if needed
+      if (newScoreData.sets.length === 0) {
+        newScoreData.sets = [{ side_a_points: 0, side_b_points: 0, point_log: [] }];
+        newScoreData.current_set = 0;
+      } else {
+        newScoreData.current_set = Math.min(newScoreData.current_set, newScoreData.sets.length - 1);
+      }
+      const { data, error: err } = await supabase.from('matches').update({ score_data: newScoreData }).eq('id', matchId).select().single();
+      if (err) throw err;
+      setMatch(data);
+      setSelectedGameIndex(null);
+      if (match.status === 'finished') setEditedAfterFinish(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Undo last point in a specific game
+  const undoPointInGame = async (idx) => {
+    if (!match || saving) return;
+    const game = sets[idx];
+    if (!game?.point_log?.length) return;
+
+    setSaving(true);
+    setError('');
+    try {
+      const newScoreData = JSON.parse(JSON.stringify(match.score_data));
+      const g = newScoreData.sets[idx];
+      const lastPoint = g.point_log.pop();
+      const pointKey = lastPoint.scorer === 'side_a' ? 'side_a_points' : 'side_b_points';
+      g[pointKey] = Math.max(0, g[pointKey] - 1);
+      const { data, error: err } = await supabase.from('matches').update({ score_data: newScoreData }).eq('id', matchId).select().single();
+      if (err) throw err;
+      setMatch(data);
+      if (match.status === 'finished') setEditedAfterFinish(true);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -561,16 +619,31 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
         <div className="scorer-middle">
           <div className="scorer-sets-display">
             {sets.map((set, i) => (
-              <div
-                key={i}
-                className={`scorer-set-pill ${i === currentSetIndex ? 'active' : ''}`}
-                onClick={() => switchSet(i)}
-              >
-                <span className="scorer-set-label">Set {i + 1}</span>
+              <div key={i}
+                className={`scorer-set-pill ${i === currentSetIndex ? 'active' : ''} ${selectedGameIndex === i ? 'selected' : ''}`}
+                onClick={() => { switchSet(i); setSelectedGameIndex(selectedGameIndex === i ? null : i); }}>
+                <span className="scorer-set-label">G{i + 1}</span>
                 <span className="scorer-set-score">{set.side_a_points}-{set.side_b_points}</span>
               </div>
             ))}
           </div>
+          {/* Game action panel — shown when a game pill is selected */}
+          {selectedGameIndex !== null && isEditable && (
+            <div className="scorer-game-actions">
+              <span style={{ fontSize: 10, color: '#888' }}>Game {selectedGameIndex + 1}</span>
+              <button className="scorer-btn undo" onClick={() => undoPointInGame(selectedGameIndex)}
+                disabled={saving || !sets[selectedGameIndex]?.point_log?.length}
+                style={{ fontSize: 11, padding: '4px 10px' }}>↩ Undo</button>
+              <button onClick={() => deleteGame(selectedGameIndex)} disabled={saving}
+                style={{ fontSize: 11, padding: '4px 10px', background: 'none', border: '1px solid #e85454',
+                  color: '#e85454', borderRadius: 6, cursor: 'pointer' }}>
+                🗑 Delete
+              </button>
+              <button onClick={() => setSelectedGameIndex(null)}
+                style={{ fontSize: 11, padding: '4px 8px', background: 'none', border: '1px solid #333',
+                  color: '#666', borderRadius: 6, cursor: 'pointer' }}>×</button>
+            </div>
+          )}
         </div>
 
         <div
@@ -591,8 +664,8 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
             <button className="scorer-btn undo" onClick={undoPoint} disabled={saving || !currentSet?.point_log?.length}>
               ↩ Undo
             </button>
-            <button className="scorer-btn new-set" onClick={addNewSet} disabled={saving}>
-              + New Set
+            <button className="scorer-btn new-game" onClick={addNewSet} disabled={saving}>
+              + New Game
             </button>
           </>
         )}
@@ -698,6 +771,20 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
           </div>
         )}
       </div>
+
+      {/* Score graph — shows graph of last active game */}
+      {match.score_data?.sets && (match.status === 'in_progress' || match.status === 'finished' || match.status === 'locked') && (
+        <div style={{ marginTop: 12, padding: '10px 14px', background: '#0d0d14', borderRadius: 8, border: '1px solid #1e1e2e' }}>
+          <ScoreGraph
+            match={match}
+            sideALabel={sideLabel(match.side_a)}
+            sideBLabel={sideLabel(match.side_b)}
+            alwaysShow={true}
+            showGamePills={true}
+            activeGameIdx={null}
+          />
+        </div>
+      )}
 
       {/* Point log */}
       {currentSet?.point_log?.length > 0 && (

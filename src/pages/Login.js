@@ -43,7 +43,7 @@ export default function Login({ onBack }) {
         {/* Tabs */}
         <div className="login-tabs">
           <button className={`login-tab ${tab === 'referee' ? 'active' : ''}`} onClick={() => { setTab('referee'); setError(''); }}>
-            🏅 Referee
+            Referee
           </button>
           <button className={`login-tab ${tab === 'admin' ? 'active' : ''}`} onClick={() => { setTab('admin'); setError(''); }}>
             ⚙️ Admin

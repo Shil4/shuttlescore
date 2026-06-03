@@ -1,5 +1,6 @@
 // ── Admin Match Card ──────────────────────────────────────────
 import { stageLabel, statusBadge, scoreDisplay } from './matchManagerHelpers';
+import RefBadge from '../RefBadge';
 
 export default function AdminMatchCard({
   match: m, sectionKey, sideLabel, refName, adminProfiles,
@@ -60,10 +61,10 @@ export default function AdminMatchCard({
               <option value="">Assign referee...</option>
               <option value="__admin__">🛡️ Admin (you)</option>
               {allReferees.filter(r => r.display_name).map(r => (
-                <option key={r.id} value={r.id}>🏅 {r.display_name}</option>
+                <option key={r.id} value={r.id}>[R] {r.display_name}</option>
               ))}
               {allReferees.filter(r => !r.display_name).map(r => (
-                <option key={r.id} value={r.id}>🏅 {r.username} (no name)</option>
+                <option key={r.id} value={r.id}>[R] {r.username} (no name)</option>
               ))}
             </select>
             {m.referee_id && !m.referee_is_admin && (
@@ -77,7 +78,7 @@ export default function AdminMatchCard({
           </>
         ) : (
           <>
-            {m.referee_id && <span className="match-referee-name">🏅 {refName(m.referee_id)}</span>}
+            {m.referee_id && <span className="match-referee-name"><RefBadge /> {refName(m.referee_id)}</span>}
             {m.referee_is_admin && (
               <span className="match-referee-name">🛡️ {(() => {
                 const a = adminProfiles.find(p => p.id === m.referee_admin_id);
