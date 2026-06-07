@@ -75,7 +75,7 @@ export default function PublicView({ onLogin }) {
   // Load tournaments + all admin profiles
   useEffect(() => {
     (async () => {
-      const { data: allTourns } = await supabase.from('tournaments').select('*').order('start_date', { ascending: false });
+      const { data: allTourns } = await supabase.from('tournaments').select('*').order('updated_at', { ascending: false });
       setTournaments(allTourns || []);
       if (allTourns?.length > 0) { const active = allTourns.find(t => t.status === 'in_progress') || allTourns[0]; setSelectedTournament(active); }
       const { data: admins } = await supabase.from('profiles').select('id, display_name, name, player_id').eq('role', 'admin');
