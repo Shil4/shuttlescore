@@ -26,11 +26,11 @@ export function getBucket(player, category) {
   const age = getPlayerAge(player);
   if (age === null) return 99;
   switch (category) {
-    case 'u8':    return age < 8  ? 0 : age < 13 ? 1 : age < 18 ? 2 : age < 45 ? 3 : 4;
-    case 'u12':   return (age >= 8 && age < 13) ? 0 : age < 8 ? 1 : age < 18 ? 2 : age < 45 ? 3 : 4;
-    case 'u18':   return (age >= 13 && age < 18) ? 0 : (age >= 8 && age < 13) ? 1 : age < 8 ? 2 : age < 45 ? 3 : 4;
-    case 'adult': return (age >= 18 && age < 45) ? 0 : age >= 45 ? 1 : (age >= 13 && age < 18) ? 2 : (age >= 8 && age < 13) ? 3 : 4;
-    case 'senior':return age >= 45 ? 0 : (age >= 18 && age < 45) ? 1 : (age >= 13 && age < 18) ? 2 : (age >= 8 && age < 13) ? 3 : 4;
+    case 'u8':    return age <= 8  ? 0 : age <= 13 ? 1 : age <= 18 ? 2 : age < 45 ? 3 : 4;
+    case 'u12':   return (age >= 8 && age <= 13) ? 0 : age < 8 ? 1 : age <= 18 ? 2 : age < 45 ? 3 : 4;
+    case 'u18':   return (age > 13 && age <= 18) ? 0 : (age >= 8 && age <= 13) ? 1 : age < 8 ? 2 : age < 45 ? 3 : 4;
+    case 'adult': return (age > 18 && age < 45) ? 0 : age >= 45 ? 1 : (age > 13 && age <= 18) ? 2 : (age >= 8 && age <= 13) ? 3 : 4;
+    case 'senior':return age >= 45 ? 0 : (age > 18 && age < 45) ? 1 : (age > 13 && age <= 18) ? 2 : (age >= 8 && age <= 13) ? 3 : 4;
     default:      return 0;
   }
 }
@@ -38,11 +38,11 @@ export function getBucket(player, category) {
 // Section header labels shown in the registration player list
 export function bucketLabel(category, bucketIdx) {
   const labels = {
-    u8:     ['Under 8 (eligible)',      'U-13',          'U-18',    'Adults',       'Seniors'],
-    u12:    ['Ages 8-12 (eligible)',    'Under 8',       'U-18',    'Adults',       'Seniors'],
-    u18:    ['Ages 13-18 (eligible)',   'U-13',          'Under 8', 'Adults',       'Seniors'],
-    adult:  ['Adults 18-44 (eligible)', 'Seniors 45+',   'U-18',    'U-13',         'Under 8'],
-    senior: ['Seniors 45+ (eligible)',  'Adults 18-44',  'U-18',    'U-13',         'Under 8'],
+    u8:     ['Under 8 (eligible)',         'U-13',               'U-18',    'Adults',  'Seniors'],
+    u12:    ['U-13 eligible (ages 8-13)',   'Under 8',            'U-18',    'Adults',  'Seniors'],
+    u18:    ['U-18 eligible (ages 14-18)',  'U-13 (ages 8-13)',   'Under 8', 'Adults',  'Seniors'],
+    adult:  ['Adults 19-44 (eligible)',     'Seniors 45+',        'U-18',    'U-13',    'Under 8'],
+    senior: ['Seniors 45+ (eligible)',      'Adults 19-44',       'U-18',    'U-13',    'Under 8'],
   };
   return (labels[category] || [])[bucketIdx] || 'Other';
 }
