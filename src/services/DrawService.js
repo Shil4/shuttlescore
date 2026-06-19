@@ -511,12 +511,12 @@ export const DrawService = {
       sB.pointsFor += bPoints; sB.pointsAgainst += aPoints;
     }
 
-    for (const s of stats.values()) s.pointDiff = s.pointsFor - s.pointsAgainst;
+    // Register all participants even with 0 matches played yet —
+    // applies to both group stage and round robin (groupId === null)
+    const allMatchesForScope = matches.filter(m => groupId ? m.group_id === groupId : true);
+    for (const m of allMatchesForScope) { if (m.side_a) getOrCreate(m.side_a); if (m.side_b) getOrCreate(m.side_b); }
 
-    if (groupId) {
-      const groupMatches = matches.filter(m => m.group_id === groupId);
-      for (const m of groupMatches) { if (m.side_a) getOrCreate(m.side_a); if (m.side_b) getOrCreate(m.side_b); }
-    }
+    for (const s of stats.values()) s.pointDiff = s.pointsFor - s.pointsAgainst;
 
     const sorted = [...stats.values()].sort((a, b) => {
       if (b.wins !== a.wins) return b.wins - a.wins;

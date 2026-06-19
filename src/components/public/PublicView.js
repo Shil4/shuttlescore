@@ -203,7 +203,15 @@ export default function PublicView({ onLogin }) {
       sA.pf += tA; sA.pa += tB; sB.pf += tB; sB.pa += tA;
       if (m.winner === 'side_a') { sA.won++; sB.lost++; } else if (m.winner === 'side_b') { sB.won++; sA.lost++; }
     });
-    return Object.values(stats).sort((a, b) => b.won - a.won || (b.pf - b.pa) - (a.pf - a.pa));
+    const sorted = Object.values(stats).sort((a, b) => b.won - a.won || (b.pf - b.pa) - (a.pf - a.pa));
+    // Flag ties so spectators see when an admin needs to resolve manually
+    sorted.forEach((s, i) => {
+      s.tied = false;
+      if (i > 0 && sorted[i - 1].won === s.won && (sorted[i - 1].pf - sorted[i - 1].pa) === (s.pf - s.pa)) {
+        s.tied = true; sorted[i - 1].tied = true;
+      }
+    });
+    return sorted;
   };
 
   // Player list for Players tab
@@ -466,7 +474,7 @@ export default function PublicView({ onLogin }) {
                         <tbody>
                           {standings.map((s, i) => (
                             <tr key={s.key}>
-                              <td>{i + 1}</td>
+                              <td>{i + 1}{s.tied && <span style={{ color: '#e85454', marginLeft: 2 }} title="Tied on wins and point diff">*</span>}</td>
                               <td className="clickable" onClick={() => s.playerIds?.[0] && setSelectedPlayerId(s.playerIds[0])}>{sideLbl(s.playerIds)}</td>
                               <td>{s.played}</td><td>{s.won}</td><td>{s.lost}</td><td>{(s.pf - s.pa) >= 0 ? '+' : ''}{s.pf - s.pa}</td>
                             </tr>
@@ -494,6 +502,49 @@ export default function PublicView({ onLogin }) {
                 })}
               </div>
             )}
+
+            {/* Round Robin — treated like a single virtual group (no group_id) */}
+            {(() => {
+              const rrMatches = eventMatches.filter(m => m.stage === 'round_robin');
+              if (!rrMatches.length) return null;
+              const standings = calcGroupStandings(null);
+              const rrPlayable = rrMatches.filter(m => m.side_a && m.side_b);
+              return (
+                <div className="pub-groups">
+                  <div className="pub-group-card">
+                    <h4 className="pub-group-name">Round Robin</h4>
+                    <table className="pub-standings-table">
+                      <thead><tr><th>#</th><th>Player/Team</th><th>P</th><th>W</th><th>L</th><th>PD</th></tr></thead>
+                      <tbody>
+                        {standings.map((s, i) => (
+                          <tr key={s.key}>
+                            <td>{i + 1}{s.tied && <span style={{ color: '#e85454', marginLeft: 2 }} title="Tied on wins and point diff">*</span>}</td>
+                            <td className="clickable" onClick={() => s.playerIds?.[0] && setSelectedPlayerId(s.playerIds[0])}>{sideLbl(s.playerIds)}</td>
+                            <td>{s.played}</td><td>{s.won}</td><td>{s.lost}</td><td>{(s.pf - s.pa) >= 0 ? '+' : ''}{s.pf - s.pa}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="pub-group-matches">
+                      {rrPlayable.map(m => {
+                        const scores = scoreDisplay(m);
+                        return (
+                          <div key={m.id} className={'pub-match-mini ' + (m.status === 'in_progress' ? 'live' : '')}>
+                            <div className="pub-match-mini-sides">
+                              <span className={m.winner === 'side_a' ? 'won' : ''} onClick={() => m.side_a?.[0] && setSelectedPlayerId(m.side_a[0])}>{sideLbl(m.side_a)}</span>
+                              <span className="pub-match-mini-score">
+                                {scores ? scores.map((s, i) => <span key={i} className="pub-set-score" style={{ fontSize: 10, ...(s.walkover ? { color: '#d4a843' } : {}) }}>{s.text}</span>) : 'vs'}
+                              </span>
+                              <span className={m.winner === 'side_b' ? 'won' : ''} onClick={() => m.side_b?.[0] && setSelectedPlayerId(m.side_b[0])}>{sideLbl(m.side_b)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Bracket */}
             {(() => {

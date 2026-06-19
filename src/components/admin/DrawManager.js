@@ -296,6 +296,14 @@ export default function DrawManager() {
     // Find who has swapRank
     const swapKey = Object.entries(cfg.manual_rankings[gKey]).find(([k, r]) => r === swapRank)?.[0];
     if (swapKey) {
+      // Safety check: only allow the swap if both players are genuinely tied
+      // (same wins and point diff) — prevents accidentally promoting a player
+      // above someone with a strictly better record via an adjacent tie cluster.
+      const current = standings.find(s => s.key === playerKey);
+      const swapTarget = standings.find(s => s.key === swapKey);
+      if (!current || !swapTarget || current.wins !== swapTarget.wins || current.pointDiff !== swapTarget.pointDiff) {
+        return;
+      }
       cfg.manual_rankings[gKey][swapKey] = currentRank;
       cfg.manual_rankings[gKey][playerKey] = swapRank;
     }
@@ -329,10 +337,14 @@ export default function DrawManager() {
               <td style={{ padding: '4px 6px', textAlign: 'center', color: '#e85454' }}>{s.losses}</td>
               <td style={{ padding: '4px 6px', textAlign: 'center', color: s.pointDiff >= 0 ? '#4ecb71' : '#e85454' }}>{s.pointDiff >= 0 ? '+' : ''}{s.pointDiff}</td>
               {hasTies && <td style={{ padding: '2px 4px', whiteSpace: 'nowrap' }}>
-                {s.tied && i > 0 && <button onClick={() => handleManualRank(stageId, groupId, s.key, -1)}
-                  style={{ background: 'none', border: '1px solid #555', borderRadius: 3, color: '#888', cursor: 'pointer', fontSize: 10, padding: '1px 4px', marginRight: 2 }}>{'\u25B2'}</button>}
-                {s.tied && i < standings.length - 1 && <button onClick={() => handleManualRank(stageId, groupId, s.key, 1)}
-                  style={{ background: 'none', border: '1px solid #555', borderRadius: 3, color: '#888', cursor: 'pointer', fontSize: 10, padding: '1px 4px' }}>{'\u25BC'}</button>}
+                {s.tied && i > 0 && standings[i - 1].wins === s.wins && standings[i - 1].pointDiff === s.pointDiff && (
+                  <button onClick={() => handleManualRank(stageId, groupId, s.key, -1)}
+                    style={{ background: 'none', border: '1px solid #555', borderRadius: 3, color: '#888', cursor: 'pointer', fontSize: 10, padding: '1px 4px', marginRight: 2 }}>{'\u25B2'}</button>
+                )}
+                {s.tied && i < standings.length - 1 && standings[i + 1].wins === s.wins && standings[i + 1].pointDiff === s.pointDiff && (
+                  <button onClick={() => handleManualRank(stageId, groupId, s.key, 1)}
+                    style={{ background: 'none', border: '1px solid #555', borderRadius: 3, color: '#888', cursor: 'pointer', fontSize: 10, padding: '1px 4px' }}>{'\u25BC'}</button>
+                )}
               </td>}
             </tr>
           ))}</tbody>

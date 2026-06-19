@@ -94,6 +94,21 @@ const buildHTML = (tournament, events, groups, matches, players) => {
       body += `</div>`;
     }
 
+    // Round robin standings — treated as a single virtual group (no group_id)
+    const rrMatches = evtMatches.filter(m => m.stage === 'round_robin');
+    if (rrMatches.length > 0) {
+      const standings = calcStandings(null, evtMatches);
+      body += `<h3>Round Robin</h3><div class="groups"><div class="group">
+        <h4>Standings</h4>
+        <table>
+          <thead><tr><th>#</th><th>Player / Team</th><th>P</th><th>W</th><th>L</th><th>PD</th></tr></thead>
+          <tbody>`;
+      standings.forEach((s, i) => {
+        body += `<tr><td>${i + 1}</td><td>${sl(s.playerIds)}</td><td>${s.played}</td><td>${s.won}</td><td>${s.lost}</td><td>${s.pf - s.pa >= 0 ? '+' : ''}${s.pf - s.pa}</td></tr>`;
+      });
+      body += `</tbody></table></div></div>`;
+    }
+
     // Knockout results
     const knockout = evtMatches.filter(m => m.stage !== 'group' && m.stage !== 'round_robin' && m.winner);
     if (knockout.length > 0) {
