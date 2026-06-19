@@ -127,7 +127,7 @@ export default function DrawManager() {
     const config = {};
     if (newStageType === 'group') { config.games_per_match = newStageConfig.games_per_match; config.target_group_size = newStageConfig.target_group_size; config.advancement_counts = { ...newStageConfig.advancement_counts }; }
     else if (newStageType === 'round_robin') { config.games_per_match = newStageConfig.games_per_match; config.advancement_count = newStageConfig.advancement_count; }
-    else if (newStageType === 'elimination') { config.games_per_match = newStageConfig.games_per_match; config.third_place_match = newStageConfig.third_place_match; }
+    else if (newStageType === 'elimination') { config.games_per_match = newStageConfig.games_per_match; config.third_place_match = getExpectedCount(sn) === 2 ? false : newStageConfig.third_place_match; }
     try { const c = await DrawService.createStage(selectedEvent.id, sn, newStageType, config); setAddingStage(false); await loadStageData(selectedEvent.id); setExpandedStageId(c.id); setSuccess('Stage ' + sn + ' added'); }
     catch (err) { setError(err.message); }
   };
@@ -635,16 +635,24 @@ export default function DrawManager() {
       {stages.length > 0 && canAddStage && <div style={{ textAlign: 'center', color: '#555', fontSize: 18, margin: '4px 0' }}>{'\u25BC'}</div>}
 
       {/* Add stage */}
-      {canAddStage && participants.length >= 4 && (!addingStage ? (
-        <button className="admin-btn primary" onClick={() => { setAddingStage(true); setNewStageType(stages.length === 0 ? 'group' : 'group'); setNewStageConfig({ games_per_match: 1, target_group_size: 4, advancement_counts: { uniform: true, count: 2 }, advancement_count: 2, third_place_match: false }); }}>+ Add Stage {stages.length + 1}</button>
+      {canAddStage && (participants.length >= 4 || (stages.length === 0 && participants.length === 2)) && (!addingStage ? (
+        <button className="admin-btn primary" onClick={() => {
+          setAddingStage(true);
+          const isTwoPlayerFinal = stages.length === 0 && participants.length === 2;
+          setNewStageType(isTwoPlayerFinal ? 'elimination' : 'group');
+          setNewStageConfig({ games_per_match: 1, target_group_size: 4, advancement_counts: { uniform: true, count: 2 }, advancement_count: 2, third_place_match: false });
+        }}>+ Add Stage {stages.length + 1}</button>
       ) : (
         <div style={{ background: '#14141f', borderRadius: 10, border: '1px solid #2a2a3e', padding: 16 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: '#ccc', marginBottom: 12 }}>New Stage {stages.length + 1} <span style={{ fontWeight: 400, fontSize: 12, color: '#888' }}>({getExpectedCount(stages.length + 1)} participants)</span></div>
           <div style={{ marginBottom: 12 }}><label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 4 }}>Format</label>
-            <div style={{ display: 'flex', gap: 8 }}>{(stages.length === 0 ? ['group', 'round_robin'] : ['group', 'round_robin', 'elimination']).map(t => (
+            <div style={{ display: 'flex', gap: 8 }}>{(stages.length === 0
+              ? (getExpectedCount(1) === 2 ? ['group', 'round_robin', 'elimination'] : ['group', 'round_robin'])
+              : ['group', 'round_robin', 'elimination']).map(t => (
               <button key={t} className={'admin-btn ' + (newStageType === t ? 'primary' : 'secondary')} onClick={() => setNewStageType(t)} style={{ fontSize: 12, padding: '6px 14px' }}>{STAGE_TYPE_LABELS[t]}</button>
             ))}</div>
-            {stages.length === 0 && <p style={{ fontSize: 11, color: '#555', marginTop: 4 }}>First stage must be Group or Round Robin</p>}</div>
+            {stages.length === 0 && getExpectedCount(1) !== 2 && <p style={{ fontSize: 11, color: '#555', marginTop: 4 }}>First stage must be Group or Round Robin</p>}
+            {stages.length === 0 && getExpectedCount(1) === 2 && <p style={{ fontSize: 11, color: '#4ecb71', marginTop: 4 }}>Only 2 participants — Elimination available as a straight final</p>}</div>
 
           {newStageType === 'group' && (<>
             <div style={{ marginBottom: 12 }}><label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 4 }}>Target group size</label>
@@ -656,10 +664,20 @@ export default function DrawManager() {
             <div style={{ marginBottom: 12 }}><label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 4 }}>Advance count</label>
               <div style={{ display: 'flex', gap: 6 }}>{[2, 3, 4, 6, 8].map(n => <button key={n} className={'admin-btn ' + (newStageConfig.advancement_count === n ? 'primary' : 'secondary')} onClick={() => setNewStageConfig({ ...newStageConfig, advancement_count: n })} style={{ fontSize: 12, padding: '4px 12px' }}>Top {n}</button>)}</div></div>
           )}
-          {newStageType === 'elimination' && (
-            <div style={{ marginBottom: 12 }}><label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#888', cursor: 'pointer' }}>
-              <input type="checkbox" checked={newStageConfig.third_place_match} onChange={e => setNewStageConfig({ ...newStageConfig, third_place_match: e.target.checked })} /> Include 3rd place match</label></div>
-          )}
+          {newStageType === 'elimination' && (() => {
+            const isTwoPlayer = getExpectedCount(stages.length + 1) === 2;
+            return (
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: isTwoPlayer ? '#444' : '#888', cursor: isTwoPlayer ? 'not-allowed' : 'pointer' }}>
+                  <input type="checkbox" disabled={isTwoPlayer}
+                    checked={isTwoPlayer ? false : newStageConfig.third_place_match}
+                    onChange={e => setNewStageConfig({ ...newStageConfig, third_place_match: e.target.checked })} />
+                  Include 3rd place match
+                </label>
+                {isTwoPlayer && <p style={{ fontSize: 10, color: '#444', marginTop: 2, marginLeft: 22 }}>Not applicable — only one match (the final) with 2 participants</p>}
+              </div>
+            );
+          })()}
 
           <div style={{ marginBottom: 12, padding: '8px 12px', background: '#0d0d14', borderRadius: 6, fontSize: 12, color: '#888' }}>{(() => {
             const c = getExpectedCount(stages.length + 1);
