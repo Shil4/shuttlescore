@@ -150,6 +150,10 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
   // Track if score has been edited after finish (needs re-save)
   const [editedAfterFinish, setEditedAfterFinish] = useState(false);
   const [selectedGameIndex, setSelectedGameIndex] = useState(null); // for game-level undo/delete
+  // Purely cosmetic, local-only toggle — swaps which side renders left/right on
+  // this screen for scoring convenience. Never written to the database; resets
+  // on reload, and has no effect anywhere else in the app.
+  const [displaySwapped, setDisplaySwapped] = useState(false);
 
   // Add point
   const addPoint = async (side) => {
@@ -605,14 +609,22 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
       </div>
 
       {/* Score display */}
+      {(() => {
+        const leftKey = displaySwapped ? 'side_b' : 'side_a';
+        const rightKey = displaySwapped ? 'side_a' : 'side_b';
+        const leftPoints = displaySwapped ? (currentSet?.side_b_points ?? 0) : (currentSet?.side_a_points ?? 0);
+        const rightPoints = displaySwapped ? (currentSet?.side_a_points ?? 0) : (currentSet?.side_b_points ?? 0);
+        const leftPlayers = displaySwapped ? match.side_b : match.side_a;
+        const rightPlayers = displaySwapped ? match.side_a : match.side_b;
+        return (
       <div className="scorer-main">
         <div
-          className={`scorer-side side-a ${match.winner === 'side_a' ? 'winner' : ''}`}
-          onClick={() => isEditable && addPoint('side_a')}
+          className={`scorer-side side-a ${match.winner === leftKey ? 'winner' : ''}`}
+          onClick={() => isEditable && addPoint(leftKey)}
           style={{ cursor: isEditable ? 'pointer' : 'default' }}
         >
-          <div className="scorer-side-name">{sideLabel(match.side_a)}</div>
-          <div className="scorer-side-points">{currentSet?.side_a_points ?? 0}</div>
+          <div className="scorer-side-name">{sideLabel(leftPlayers)}</div>
+          <div className="scorer-side-points">{leftPoints}</div>
           {isEditable && <div className="scorer-tap-hint">Tap to score</div>}
         </div>
 
@@ -623,10 +635,17 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
                 className={`scorer-set-pill ${i === currentSetIndex ? 'active' : ''} ${selectedGameIndex === i ? 'selected' : ''}`}
                 onClick={() => { switchSet(i); setSelectedGameIndex(selectedGameIndex === i ? null : i); }}>
                 <span className="scorer-set-label">G{i + 1}</span>
-                <span className="scorer-set-score">{set.side_a_points}-{set.side_b_points}</span>
+                <span className="scorer-set-score">{displaySwapped ? `${set.side_b_points}-${set.side_a_points}` : `${set.side_a_points}-${set.side_b_points}`}</span>
               </div>
             ))}
           </div>
+          {/* Swap sides — purely cosmetic, this screen only */}
+          <button onClick={() => setDisplaySwapped(s => !s)}
+            title="Swap which side is shown on the left/right — for this screen only, doesn't change anything elsewhere"
+            style={{ fontSize: 10, padding: '3px 9px', marginTop: 6, background: 'none', border: '1px solid #333',
+              color: '#777', borderRadius: 6, cursor: 'pointer' }}>
+            {'\u21C4'} Swap sides
+          </button>
           {/* Game action panel — shown when a game pill is selected */}
           {selectedGameIndex !== null && isEditable && (
             <div className="scorer-game-actions">
@@ -647,15 +666,17 @@ export default function MatchScorer({ matchId, allPlayers, onBack, isAdmin = tru
         </div>
 
         <div
-          className={`scorer-side side-b ${match.winner === 'side_b' ? 'winner' : ''}`}
-          onClick={() => isEditable && addPoint('side_b')}
+          className={`scorer-side side-b ${match.winner === rightKey ? 'winner' : ''}`}
+          onClick={() => isEditable && addPoint(rightKey)}
           style={{ cursor: isEditable ? 'pointer' : 'default' }}
         >
-          <div className="scorer-side-name">{sideLabel(match.side_b)}</div>
-          <div className="scorer-side-points">{currentSet?.side_b_points ?? 0}</div>
+          <div className="scorer-side-name">{sideLabel(rightPlayers)}</div>
+          <div className="scorer-side-points">{rightPoints}</div>
           {isEditable && <div className="scorer-tap-hint">Tap to score</div>}
         </div>
       </div>
+        );
+      })()}
 
       {/* Action buttons */}
       <div className="scorer-actions">

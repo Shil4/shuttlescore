@@ -109,7 +109,16 @@ export default function RefereeManager() {
   };
 
   const handleAddReferee = async () => {
-    const nextNum = referees.length + 1;
+    // Find the lowest unused refN number rather than relying on referees.length,
+    // which collides with existing usernames once any referee has been deleted.
+    const usedNums = new Set(
+      referees
+        .map(r => /^ref(\d+)$/.exec(r.username))
+        .filter(Boolean)
+        .map(m => parseInt(m[1], 10))
+    );
+    let nextNum = 1;
+    while (usedNums.has(nextNum)) nextNum++;
     const username = `ref${nextNum}`;
     const password = `shuttle${nextNum}`;
     try {

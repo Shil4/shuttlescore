@@ -13,7 +13,11 @@ export default function AdminMatchCard({
       <div className="match-card-header">
         <span className="match-event-name">
           {m._eventName}
-          {m._groupName && <span style={{ color: '#888', fontWeight: 400 }}>{' · '}{m._groupName}</span>}
+          {m._groupName ? (
+            <span style={{ color: '#888', fontWeight: 400 }}>{' · '}{m._groupName}</span>
+          ) : m.stage && m.stage !== 'group' && m.stage !== 'round_robin' ? (
+            <span style={{ color: '#888', fontWeight: 400 }}>{' · '}{stageLabel(m.stage)}</span>
+          ) : null}
           {m.court_id && <span style={{ color: '#666', fontWeight: 400 }}>{' · 🏟️ '}{m.court_id}</span>}
           {m.scheduled_date && <span style={{ color: '#555', fontWeight: 400 }}>{' · 📅 '}{(() => { const p = m.scheduled_date.split('-'); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : m.scheduled_date; })()}</span>}
         </span>

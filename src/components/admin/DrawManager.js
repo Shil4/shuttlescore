@@ -588,14 +588,16 @@ export default function DrawManager() {
                 )}
                 {!isEditing && hasMatches && stage.stage_type === 'elimination' && (
                   <div style={{ marginBottom: 12 }}>
-                    {!stageStarted && <div style={{ fontSize: 11, color: '#5b9bd5', marginBottom: 6 }}>Click two sides to swap their positions in the bracket</div>}
+                    <div style={{ fontSize: 11, color: '#5b9bd5', marginBottom: 6 }}>Click two sides to swap their positions — only available for matches that haven't started yet</div>
                     {[...matches].sort((a, b) => {
                     const order = { quarterfinal: 1, semifinal: 2, third_place: 3, final: 4 };
                     const oa = order[a.stage] || 0, ob = order[b.stage] || 0;
                     return oa !== ob ? oa - ob : (a.bracket_position || 0) - (b.bracket_position || 0);
                   }).map(m => {
                     const sc = (m.score_data?.sets || []).map(s => s.side_a_points + '-' + s.side_b_points).join(', ');
-                    const canSwap = !stageStarted && m.side_a && m.side_b;
+                    // Per-match check — a match is swappable as long as it personally hasn't
+                    // started, regardless of whether other matches elsewhere in the stage have.
+                    const canSwap = m.status === 'pending' && m.side_a && m.side_b;
                     const selA = swapSel && swapSel.matchId === m.id && swapSel.side === 'side_a';
                     const selB = swapSel && swapSel.matchId === m.id && swapSel.side === 'side_b';
                     return (<div key={m.id} style={{ display: 'flex', gap: 8, padding: '6px 0', borderBottom: '1px solid #1a1a2e', fontSize: 12, alignItems: 'center' }}>
