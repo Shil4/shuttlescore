@@ -2,6 +2,7 @@
   min-height: 100vh;
   background: #0a0a0f;
   color: #f0f0f0;
+  overflow-x: hidden;
 }
 
 /* ── Header ── */
@@ -169,15 +170,16 @@
   .dash-sidebar {
     position: fixed;
     top: 53px;
-    left: -220px;
+    left: 0;
+    transform: translateX(-220px);
     height: calc(100vh - 53px);
     z-index: 99;
-    transition: left 0.25s ease;
+    transition: transform 0.25s ease;
     box-shadow: none;
   }
 
   .dash-sidebar.open {
-    left: 0;
+    transform: translateX(0);
     box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
   }
 

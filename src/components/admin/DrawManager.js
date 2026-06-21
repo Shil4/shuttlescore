@@ -424,7 +424,7 @@ export default function DrawManager() {
       </div>
       {error && <div className="admin-error">{error}</div>}
       {success && <div style={{ background: '#152a15', border: '1px solid #2a4a2a', color: '#4ecb71', padding: '8px 14px', borderRadius: 8, marginBottom: 12, fontSize: 13 }}>{success}</div>}
-      <div style={{ fontSize: 13, color: '#888', marginBottom: 16 }}>{participants.length} {selectedEvent.type === 'doubles' ? 'pairs' : 'players'} registered{participants.length < 4 && <span style={{ color: '#e85454' }}> (min 4)</span>}</div>
+      <div style={{ fontSize: 13, color: '#888', marginBottom: 16 }}>{participants.length} {selectedEvent.type === 'doubles' ? 'pairs' : 'players'} registered{participants.length < 2 && <span style={{ color: '#e85454' }}> (min 2)</span>}</div>
 
       {/* Stage cards */}
       {stages.map((stage) => {
@@ -637,24 +637,29 @@ export default function DrawManager() {
       {stages.length > 0 && canAddStage && <div style={{ textAlign: 'center', color: '#555', fontSize: 18, margin: '4px 0' }}>{'\u25BC'}</div>}
 
       {/* Add stage */}
-      {canAddStage && (participants.length >= 4 || (stages.length === 0 && participants.length === 2)) && (!addingStage ? (
+      {canAddStage && participants.length >= 2 && (!addingStage ? (
         <button className="admin-btn primary" onClick={() => {
           setAddingStage(true);
-          const isTwoPlayerFinal = stages.length === 0 && participants.length === 2;
-          setNewStageType(isTwoPlayerFinal ? 'elimination' : 'group');
+          const c = getExpectedCount(stages.length + 1);
+          setNewStageType(c === 2 ? 'elimination' : c === 3 ? 'round_robin' : 'group');
           setNewStageConfig({ games_per_match: 1, target_group_size: 4, advancement_counts: { uniform: true, count: 2 }, advancement_count: 2, third_place_match: false });
         }}>+ Add Stage {stages.length + 1}</button>
       ) : (
         <div style={{ background: '#14141f', borderRadius: 10, border: '1px solid #2a2a3e', padding: 16 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: '#ccc', marginBottom: 12 }}>New Stage {stages.length + 1} <span style={{ fontWeight: 400, fontSize: 12, color: '#888' }}>({getExpectedCount(stages.length + 1)} participants)</span></div>
           <div style={{ marginBottom: 12 }}><label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 4 }}>Format</label>
-            <div style={{ display: 'flex', gap: 8 }}>{(stages.length === 0
-              ? (getExpectedCount(1) === 2 ? ['group', 'round_robin', 'elimination'] : ['group', 'round_robin'])
-              : ['group', 'round_robin', 'elimination']).map(t => (
+            <div style={{ display: 'flex', gap: 8 }}>{(() => {
+              const c = getExpectedCount(stages.length + 1);
+              if (c === 2) return ['elimination'];
+              if (c === 3) return ['round_robin'];
+              if (stages.length === 0) return ['group', 'round_robin'];
+              return ['group', 'round_robin', 'elimination'];
+            })().map(t => (
               <button key={t} className={'admin-btn ' + (newStageType === t ? 'primary' : 'secondary')} onClick={() => setNewStageType(t)} style={{ fontSize: 12, padding: '6px 14px' }}>{STAGE_TYPE_LABELS[t]}</button>
             ))}</div>
-            {stages.length === 0 && getExpectedCount(1) !== 2 && <p style={{ fontSize: 11, color: '#555', marginTop: 4 }}>First stage must be Group or Round Robin</p>}
-            {stages.length === 0 && getExpectedCount(1) === 2 && <p style={{ fontSize: 11, color: '#4ecb71', marginTop: 4 }}>Only 2 participants — Elimination available as a straight final</p>}</div>
+            {getExpectedCount(stages.length + 1) === 2 && <p style={{ fontSize: 11, color: '#4ecb71', marginTop: 4 }}>Only 2 participants — Elimination available as a straight final</p>}
+            {getExpectedCount(stages.length + 1) === 3 && <p style={{ fontSize: 11, color: '#4ecb71', marginTop: 4 }}>Only 3 participants — Round Robin available (top 2 advance)</p>}
+            {stages.length === 0 && getExpectedCount(stages.length + 1) >= 4 && <p style={{ fontSize: 11, color: '#555', marginTop: 4 }}>First stage must be Group or Round Robin</p>}</div>
 
           {newStageType === 'group' && (<>
             <div style={{ marginBottom: 12 }}><label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 4 }}>Target group size</label>
@@ -664,7 +669,7 @@ export default function DrawManager() {
           </>)}
           {newStageType === 'round_robin' && (
             <div style={{ marginBottom: 12 }}><label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 4 }}>Advance count</label>
-              <div style={{ display: 'flex', gap: 6 }}>{[2, 3, 4, 6, 8].map(n => <button key={n} className={'admin-btn ' + (newStageConfig.advancement_count === n ? 'primary' : 'secondary')} onClick={() => setNewStageConfig({ ...newStageConfig, advancement_count: n })} style={{ fontSize: 12, padding: '4px 12px' }}>Top {n}</button>)}</div></div>
+              <div style={{ display: 'flex', gap: 6 }}>{(getExpectedCount(stages.length + 1) === 3 ? [2] : [2, 3, 4, 6, 8]).map(n => <button key={n} className={'admin-btn ' + (newStageConfig.advancement_count === n ? 'primary' : 'secondary')} onClick={() => setNewStageConfig({ ...newStageConfig, advancement_count: n })} style={{ fontSize: 12, padding: '4px 12px' }}>Top {n}</button>)}</div></div>
           )}
           {newStageType === 'elimination' && (() => {
             const isTwoPlayer = getExpectedCount(stages.length + 1) === 2;
@@ -693,8 +698,8 @@ export default function DrawManager() {
         </div>
       ))}
 
-      {stages.length === 0 && participants.length >= 4 && !addingStage && <div className="admin-empty"><p>No stages. Click "+ Add Stage 1" to begin.</p></div>}
-      {participants.length < 4 && participants.length > 0 && <div className="admin-empty"><p>Need 4+ participants ({participants.length} registered).</p></div>}
+      {stages.length === 0 && participants.length >= 2 && !addingStage && <div className="admin-empty"><p>No stages. Click "+ Add Stage 1" to begin.</p></div>}
+      {participants.length < 2 && participants.length > 0 && <div className="admin-empty"><p>Need 2+ participants ({participants.length} registered).</p></div>}
     </div>
   );
 }

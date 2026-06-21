@@ -90,9 +90,9 @@ export default function PublicView({ onLogin }) {
     loadTournamentData(selectedTournament.id);
     loadAnnouncement(selectedTournament.id);
     setAnnouncementDismissed(false);
-    const unsub = RealtimeService.subscribeToMatches((eventType, newRow, oldRow) => {
+    const unsub = RealtimeService.subscribeToMatches((eventType, newRow) => {
       // Confetti when final or bronze match finishes
-      if (eventType === 'UPDATE' && newRow?.status === 'finished' && oldRow?.status === 'in_progress') {
+      if (eventType === 'UPDATE' && newRow?.status === 'finished') {
         const stage = newRow.stage;
         if (stage === 'final' || stage === 'third_place') launchConfetti();
       }

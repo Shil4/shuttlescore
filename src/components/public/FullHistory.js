@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { getPlayerAge } from '../admin/PlayerManager';
 import MedalBadges from './MedalBadges';
-import { sideLabel, stageLabel, formatDate, scoreDisplay, calcMedals } from './helpers';
+import { stageLabel, formatDate, scoreDisplay, calcMedals, PairNames } from './helpers';
 
 export default function FullHistory({ playerId, allPlayers, initialTab = 'player', onClose, onPlayerClick, onRefClick }) {
   const [loading, setLoading] = useState(true);
@@ -18,44 +18,51 @@ export default function FullHistory({ playerId, allPlayers, initialTab = 'player
   const loadHistory = async () => {
     setLoading(true);
     try {
-      const { data: player } = await supabase.from('players').select('*').eq('id', playerId).single();
+      // Phase 1 — root queries that only depend on playerId, run in parallel
+      const [
+        { data: player },
+        { data: allMatches },
+        { data: referee },
+        { data: adminProfile },
+      ] = await Promise.all([
+        supabase.from('players').select('*').eq('id', playerId).single(),
+        supabase.from('matches')
+          .select('*, event:events!inner(name, type, gender, category, tournament_id)')
+          .or('side_a.cs.{' + playerId + '},side_b.cs.{' + playerId + '}')
+          .order('created_at', { ascending: false }),
+        supabase.from('referees').select('*').eq('player_id', playerId).maybeSingle(),
+        supabase.from('profiles').select('id').eq('player_id', playerId).eq('role', 'admin').maybeSingle(),
+      ]);
 
-      // All matches where this player participated
-      const { data: allMatches } = await supabase.from('matches')
-        .select('*, event:events!inner(name, type, gender, category, tournament_id)')
-        .or('side_a.cs.{' + playerId + '},side_b.cs.{' + playerId + '}')
-        .order('created_at', { ascending: false });
-
-      // Get tournament IDs
+      // Phase 2 — queries that depend on phase 1 results, also run in parallel
       const tournIds = [...new Set((allMatches || []).map(m => m.event?.tournament_id).filter(Boolean))];
-      const { data: tournaments } = tournIds.length > 0
-        ? await supabase.from('tournaments').select('id, name, start_date, status').in('id', tournIds).order('start_date', { ascending: false })
-        : { data: [] };
-
-      // All events for medal calculation
       const eventIds = [...new Set((allMatches || []).map(m => m.event_id).filter(Boolean))];
-      const { data: events } = eventIds.length > 0
-        ? await supabase.from('events').select('id, name, type, gender, category').in('id', eventIds)
-        : { data: [] };
 
-      // Check if player has refereed — via referees table (regular referees)
-      const { data: referee } = await supabase.from('referees').select('*').eq('player_id', playerId).maybeSingle();
-      let refMatches = [];
-      if (referee) {
-        const { data: rm } = await supabase.from('matches').select('*, event:events!inner(name, tournament_id)')
-          .eq('referee_id', referee.id).order('created_at', { ascending: false });
-        refMatches = rm || [];
-      }
+      const [
+        { data: tournaments },
+        { data: events },
+        { data: refMatchesRaw },
+        { data: adminRefMatchesRaw },
+      ] = await Promise.all([
+        tournIds.length > 0
+          ? supabase.from('tournaments').select('id, name, start_date, status').in('id', tournIds).order('start_date', { ascending: false })
+          : Promise.resolve({ data: [] }),
+        eventIds.length > 0
+          ? supabase.from('events').select('id, name, type, gender, category').in('id', eventIds)
+          : Promise.resolve({ data: [] }),
+        referee
+          ? supabase.from('matches').select('*, event:events!inner(name, tournament_id)')
+              .eq('referee_id', referee.id).order('created_at', { ascending: false })
+          : Promise.resolve({ data: [] }),
+        adminProfile
+          ? supabase.from('matches').select('*, event:events!inner(name, tournament_id)')
+              .eq('referee_admin_id', adminProfile.id).eq('referee_is_admin', true).order('created_at', { ascending: false })
+          : Promise.resolve({ data: [] }),
+      ]);
 
-      // Also check if player is linked to an admin profile (admin referees)
-      const { data: adminProfile } = await supabase.from('profiles').select('id').eq('player_id', playerId).eq('role', 'admin').maybeSingle();
-      if (adminProfile) {
-        const { data: adminRefMatches } = await supabase.from('matches').select('*, event:events!inner(name, tournament_id)')
-          .eq('referee_admin_id', adminProfile.id).eq('referee_is_admin', true).order('created_at', { ascending: false });
-        refMatches = [...refMatches, ...(adminRefMatches || [])];
-      }
+      const refMatches = [...(refMatchesRaw || []), ...(adminRefMatchesRaw || [])];
 
-      // Build name map for display
+      // Phase 3 — name map, depends on match ids gathered from phases 1 & 2
       const allIds = new Set();
       (allMatches || []).forEach(m => { (m.side_a || []).forEach(id => allIds.add(id)); (m.side_b || []).forEach(id => allIds.add(id)); });
       refMatches.forEach(m => { (m.side_a || []).forEach(id => allIds.add(id)); (m.side_b || []).forEach(id => allIds.add(id)); });
@@ -139,13 +146,15 @@ export default function FullHistory({ playerId, allPlayers, initialTab = 'player
             </div>
           </div>
           <div className="pub-match-mini-sides">
-            <span className={activeTab === 'player' && isA && won ? 'won' : ''}
-              onClick={() => m.side_a?.[0] && onPlayerClick(m.side_a[0])}>{sideLabel(m.side_a, ap)}</span>
+            <span className={activeTab === 'player' && isA && won ? 'won' : ''}>
+              <PairNames ids={m.side_a} allPlayers={ap} onPlayerClick={onPlayerClick} />
+            </span>
             <span className="pub-match-mini-score">
               {scores ? scores.map((s, i) => <span key={i} className="pub-set-score" style={{ fontSize: 10, ...(s.walkover ? { color: '#d4a843' } : {}) }}>{s.text}</span>) : 'vs'}
             </span>
-            <span className={activeTab === 'player' && !isA && won ? 'won' : ''}
-              onClick={() => m.side_b?.[0] && onPlayerClick(m.side_b[0])}>{sideLabel(m.side_b, ap)}</span>
+            <span className={activeTab === 'player' && !isA && won ? 'won' : ''}>
+              <PairNames ids={m.side_b} allPlayers={ap} onPlayerClick={onPlayerClick} />
+            </span>
           </div>
         </div>
       </div>

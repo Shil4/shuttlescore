@@ -1,6 +1,6 @@
 import { getPlayerAge } from '../admin/PlayerManager';
 import MedalBadges from './MedalBadges';
-import { sideLabel, stageLabel, scoreDisplay, calcMedals } from './helpers';
+import { stageLabel, scoreDisplay, calcMedals, PairNames } from './helpers';
 
 /**
  * PlayerProfile — quick popup overlay showing current tournament stats
@@ -77,11 +77,15 @@ export default function PlayerProfile({
                       </div>
                     </div>
                     <div className="pub-match-mini-sides">
-                      <span className={isA && isWon ? 'won' : ''} onClick={() => m.side_a?.[0] && onPlayerClick(m.side_a[0])}>{sideLabel(m.side_a, allPlayers)}</span>
+                      <span className={isA && isWon ? 'won' : ''}>
+                        <PairNames ids={m.side_a} allPlayers={allPlayers} onPlayerClick={onPlayerClick} />
+                      </span>
                       <span className="pub-match-mini-score">
                         {scores ? scores.map((s, i) => <span key={i} className="pub-set-score" style={s.walkover ? { color: '#d4a843', fontSize: 10 } : { fontSize: 10 }}>{s.text}</span>) : 'vs'}
                       </span>
-                      <span className={!isA && isWon ? 'won' : ''} onClick={() => m.side_b?.[0] && onPlayerClick(m.side_b[0])}>{sideLabel(m.side_b, allPlayers)}</span>
+                      <span className={!isA && isWon ? 'won' : ''}>
+                        <PairNames ids={m.side_b} allPlayers={allPlayers} onPlayerClick={onPlayerClick} />
+                      </span>
                     </div>
                     {(() => {
                       const refDisplay = getMatchRefDisplay ? getMatchRefDisplay(m) : (refereeNameFn ? refereeNameFn(m.referee_id) : '');

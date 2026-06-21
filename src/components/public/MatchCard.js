@@ -1,6 +1,6 @@
 import ScoreGraph from './ScoreGraph';
 import { MedalIcon } from './MedalBadges';
-import { sideLabel, stageLabel, formatDate, scoreDisplay } from './helpers';
+import { sideLabel, stageLabel, formatDate, scoreDisplay, PairNames } from './helpers';
 
 /**
  * MatchCard — renders a match in the overview tab
@@ -36,8 +36,8 @@ export default function MatchCard({ match: m, allPlayers, onPlayerClick, onRefCl
       </div>
       <div className="pub-match-body">
         <div className={'pub-match-side ' + (m.winner === 'side_a' ? 'winner' : '')}>
-          <span className="pub-match-name clickable" onClick={() => m.side_a?.[0] && onPlayerClick(m.side_a[0])}>
-            {aLabel}
+          <span className="pub-match-name">
+            <PairNames ids={m.side_a} allPlayers={allPlayers} onPlayerClick={onPlayerClick} className="clickable" />
             <MedalIcon type={aMedal} />
           </span>
         </div>
@@ -47,9 +47,9 @@ export default function MatchCard({ match: m, allPlayers, onPlayerClick, onRefCl
           )) : <span className="pub-match-vs-text">vs</span>}
         </div>
         <div className={'pub-match-side right ' + (m.winner === 'side_b' ? 'winner' : '')}>
-          <span className="pub-match-name clickable" onClick={() => m.side_b?.[0] && onPlayerClick(m.side_b[0])}>
+          <span className="pub-match-name">
             <MedalIcon type={bMedal} />
-            {bLabel}
+            <PairNames ids={m.side_b} allPlayers={allPlayers} onPlayerClick={onPlayerClick} className="clickable" />
           </span>
         </div>
       </div>

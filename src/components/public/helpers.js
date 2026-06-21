@@ -22,6 +22,34 @@ export const sideLabel = (arr, allPlayers) => {
   return arr.map(id => pName(id, allPlayers)).join(' & ');
 };
 
+/**
+ * PairNames — renders a side's player(s) as individually clickable names,
+ * joined by " & " for doubles. Use in place of a plain sideLabel(...) string
+ * wherever the names need to be clickable (so each partner opens their own
+ * profile, not just the first player on the side).
+ *
+ * Props:
+ *   ids           — side_a/side_b array of player ids
+ *   allPlayers    — full players list (for name lookup)
+ *   onPlayerClick — handler called with a single player id
+ *   className     — optional class applied to each individual name span
+ */
+export function PairNames({ ids, allPlayers, onPlayerClick, className }) {
+  if (!ids || !ids.length) return 'TBD';
+  return ids.map((id, i) => (
+    <span key={id || i}>
+      {i > 0 && ' & '}
+      <span
+        className={className}
+        onClick={(e) => { e.stopPropagation(); onPlayerClick && onPlayerClick(id); }}
+        style={{ cursor: onPlayerClick ? 'pointer' : 'default' }}
+      >
+        {pName(id, allPlayers)}
+      </span>
+    </span>
+  ));
+}
+
 export const scoreDisplay = (m) => {
   if (m.default_win) return [{ text: 'Walkover', walkover: true }];
   if (!m.score_data?.sets) return null;

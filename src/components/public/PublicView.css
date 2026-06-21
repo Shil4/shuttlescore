@@ -101,9 +101,9 @@
 .pub-match-side.right { text-align: right; }
 .pub-match-side.winner .pub-match-name { color: #4ecb71; font-weight: 700; }
 .pub-match-name { font-size: 15px; color: #ddd; font-weight: 500; line-height: 1.3; }
-.pub-match-name.clickable { cursor: pointer; }
-.pub-match-name.clickable:hover { color: #d4a843; }
-.pub-match-scores { display: flex; gap: 5px; flex-shrink: 0; }
+.pub-match-name .clickable { cursor: pointer; }
+.pub-match-name .clickable:hover { color: #d4a843; }
+.pub-match-scores { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; align-items: center; }
 .pub-set-score {
   background: #1e1e30; padding: 3px 10px; border-radius: 6px;
   font-size: 14px; color: #ddd; font-weight: 700; font-variant-numeric: tabular-nums;
@@ -187,7 +187,7 @@
 /* Bracket */
 .pub-bracket { overflow-x: auto; padding-bottom: 12px; }
 .pub-bracket-rounds { display: flex; gap: 20px; min-width: max-content; align-items: flex-start; }
-.pub-bracket-round { min-width: 220px; display: flex; flex-direction: column; gap: 12px; }
+.pub-bracket-round { width: max-content; min-width: 220px; display: flex; flex-direction: column; gap: 12px; }
 .pub-bracket-round-title {
   font-size: 12px; font-weight: 700; color: #888; text-transform: uppercase;
   letter-spacing: 0.5px; text-align: center; padding-bottom: 8px; border-bottom: 1px solid #1e1e2e;
@@ -199,13 +199,13 @@
 .pub-bracket-match.live { border-color: #2a5a2a; box-shadow: 0 0 12px rgba(78,203,113,0.1); }
 .pub-bracket-side {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 10px 14px; font-size: 13px; color: #bbb; border-bottom: 1px solid #1e1e2e;
-  cursor: pointer; transition: background 0.15s;
+  gap: 10px; padding: 10px 14px; font-size: 13px; color: #bbb; border-bottom: 1px solid #1e1e2e;
+  transition: background 0.15s;
 }
+.pub-bracket-name { white-space: nowrap; }
 .pub-bracket-side:last-child { border-bottom: none; }
-.pub-bracket-side:hover { background: #1a1a2a; }
 .pub-bracket-side.winner { color: #4ecb71; font-weight: 600; }
-.pub-bracket-pts { font-size: 12px; color: #888; font-variant-numeric: tabular-nums; }
+.pub-bracket-pts { font-size: 12px; color: #888; font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0; }
 .pub-bracket-live {
   position: absolute; top: 4px; right: 6px;
   font-size: 9px; font-weight: 700; color: #4ecb71;

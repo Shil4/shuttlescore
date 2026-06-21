@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { MedalIcon } from './MedalBadges';
-import { sideLabel, stageLabel, scoreDisplay } from './helpers';
+import { stageLabel, scoreDisplay, PairNames } from './helpers';
 
 const STAGE_ORDER = ['round_of_32', 'round_of_16', 'quarterfinal', 'semifinal', 'third_place', 'final'];
 
@@ -12,8 +12,6 @@ export default function BracketView({ matches, allPlayers, onPlayerClick }) {
   const containerRef = useRef(null);
   const matchRefs = useRef({}); // matchId → DOM node
   const [connectors, setConnectors] = useState([]);
-
-  const sideLbl = (arr) => sideLabel(arr, allPlayers);
 
   // Group matches by stage, sorted by bracket_position
   const byStage = {};
@@ -102,9 +100,10 @@ export default function BracketView({ matches, allPlayers, onPlayerClick }) {
                   <div key={m.id} ref={el => { matchRefs.current[m.id] = el; }}
                     className={'pub-bracket-match ' + (m.status === 'in_progress' ? 'live' : '')}>
 
-                    <div className={'pub-bracket-side ' + (m.winner === 'side_a' ? 'winner' : '')}
-                      onClick={() => m.side_a?.[0] && onPlayerClick(m.side_a[0])}>
-                      <span className="pub-bracket-name">{sideLbl(m.side_a)}</span>
+                    <div className={'pub-bracket-side ' + (m.winner === 'side_a' ? 'winner' : '')}>
+                      <span className="pub-bracket-name">
+                        <PairNames ids={m.side_a} allPlayers={allPlayers} onPlayerClick={onPlayerClick} />
+                      </span>
                       <span className="pub-bracket-pts">
                         {m.default_win && m.winner === 'side_a'
                           ? <span style={{ color: '#d4a843' }}>W/O</span>
@@ -114,9 +113,10 @@ export default function BracketView({ matches, allPlayers, onPlayerClick }) {
                       {isFinished && m.winner === 'side_a' && m.stage === 'third_place' && <MedalIcon type="bronze" />}
                     </div>
 
-                    <div className={'pub-bracket-side ' + (m.winner === 'side_b' ? 'winner' : '')}
-                      onClick={() => m.side_b?.[0] && onPlayerClick(m.side_b[0])}>
-                      <span className="pub-bracket-name">{sideLbl(m.side_b)}</span>
+                    <div className={'pub-bracket-side ' + (m.winner === 'side_b' ? 'winner' : '')}>
+                      <span className="pub-bracket-name">
+                        <PairNames ids={m.side_b} allPlayers={allPlayers} onPlayerClick={onPlayerClick} />
+                      </span>
                       <span className="pub-bracket-pts">
                         {m.default_win && m.winner === 'side_b'
                           ? <span style={{ color: '#d4a843' }}>W/O</span>
